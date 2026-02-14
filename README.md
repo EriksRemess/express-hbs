@@ -2,6 +2,16 @@
 
 Express handlebars template engine with multiple layouts, blocks and cached partials.
 
+## Fork Notice
+
+This project is an update of the original `express-hbs`, focused on latest Node.js LTS and Express 5 compatibility.
+
+- Original project: https://github.com/TryGhost/express-hbs
+- Fork (this project): https://github.com/EriksRemess/express-hbs
+- npm package name: `@eriks/express-hbs`
+
+All credit for the engine design and original implementation goes to the original `express-hbs` developers and contributors.
+
 ## v2.0.0
 
 Version 2 was a rewrite and cleanup, with no known breaking changes. Lots of bugs were fixed which may have subtly changed behaviour.
@@ -17,29 +27,25 @@ If you're upgrading from v0.8.4 to v1.0.0 there are some potentially breaking ch
 
 ## Usage
 
-To use with express 4.
+To use with Express 5.
 ```js
-var hbs = require('express-hbs');
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import hbs from '@eriks/express-hbs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Use `.hbs` for extensions and find partials in `views/partials`.
-app.engine('hbs', hbs.express4({
-  partialsDir: __dirname + '/views/partials'
+app.engine('hbs', hbs.express({
+  partialsDir: path.join(__dirname, 'views/partials')
 }));
 app.set('view engine', 'hbs');
-app.set('views', __dirname + '/views');
+app.set('views', path.join(__dirname, 'views'));
 ```
-To use with express 3 is the same as above, except use hbs.express3
+Options for `#express`
 
 ```js
-app.engine('hbs', hbs.express3({
-  partialsDir: __dirname + '/views/partials'
-}));
-```
-
-Options for `#express3` and `#express4`
-
-```js
-hbs.express4({
+hbs.express({
   partialsDir: "{String/Array} [Required] Path to partials templates, one or several directories",
 
   // OPTIONAL settings
@@ -48,7 +54,7 @@ hbs.express4({
   contentHelperName: "{String} Override 'contentFor' helper name.",
   defaultLayout: "{String} Absolute path to default layout template",
   extname: "{String} Extension for templates & partials, defaults to `.hbs`",
-  handlebars: "{Module} Use external handlebars instead of express-hbs dependency",
+  handlebars: "{Module} Use external handlebars instead of @eriks/express-hbs dependency",
   i18n: "{Object} i18n object",
   layoutsDir: "{String} Path to layout templates",
   templateOptions: "{Object} options to pass to template()",
@@ -180,16 +186,17 @@ in markup
 Express-hbs supports [i18n](https://github.com/mashpie/i18n-node)
 
 ```js
-var i18n = require('i18n');
+import cookieParser from 'cookie-parser';
+import i18n from 'i18n';
 
 // minimal config
 i18n.configure({
     locales: ['en', 'fr'],
     cookie: 'locale',
-    directory: __dirname + "/locales"
+    directory: path.join(__dirname, 'locales')
 });
 
-app.engine('hbs', hbs.express3({
+app.engine('hbs', hbs.express({
     // ... options from above
     i18n: i18n,  // registers __ and __n helpers
 }));
@@ -197,7 +204,7 @@ app.set('view engine', 'hbs');
 app.set('views', viewsDir);
 
 // cookies are needed
-app.use(express.cookieParser());
+app.use(cookieParser());
 
 // init i18n module
 app.use(i18n.init);
@@ -208,7 +215,7 @@ app.use(i18n.init);
 Create isolated engine instances with their own cache system and handlebars engine.
 
 ```js
-var hbs = require('express-hbs');
+import hbs from '@eriks/express-hbs';
 var instance1 = hbs.create();
 var instance2 = hbs.create();
 ```
@@ -275,19 +282,15 @@ File `views/index.hbs`
 
 To run example project
 
-    npm install -d
+    npm install
     node example/app.js
 
 
 ## Testing
 
-The test suite requires the `grunt-cli` package:
+Install dependencies and run:
 
-    npm install -g grunt-cli
-    npm install -d
-
-Once everything's installed, just run:
-
+    npm install
     npm test
 
 

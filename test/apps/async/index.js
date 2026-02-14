@@ -1,12 +1,12 @@
-'use strict';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-var express = require('express');
-var cookieParser = require('cookie-parser');
-var fs = require('fs');
-var path = require('path');
-var url = require('url');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-var pages = [
+const pages = [
   {
     id: 1,
     title: 'Title 1'
@@ -21,7 +21,7 @@ var pages = [
   }
 ]
 
-var comments = [
+const comments = [
   {
     id: 1,
     page: 1,
@@ -54,17 +54,15 @@ var comments = [
   }
 ]
 
-function getRandomNumber(min, max) {
-  return Math.random() * (max - min) + min;
-}
+const getRandomNumber = (min, max) => Math.random() * (max - min) + min;
 
 function create(hbs, env) {
   if (env) process.env.NODE_ENV = env;
-  var app = express();
-  var viewsDir = path.join(__dirname, 'views');
+  const app = express();
+  const viewsDir = path.join(__dirname, 'views');
 
   // Hook in express-hbs and tell it where known directories reside
-  app.engine('hbs', hbs.express4({
+  app.engine('hbs', hbs.express({
     defaultLayout: path.join(viewsDir, 'layout.hbs'),
     restrictLayoutsTo: viewsDir
   }));
@@ -73,28 +71,28 @@ function create(hbs, env) {
 
   app.use(cookieParser());
 
-  app.get('/', function (req, res) {
+  app.get('/', (req, res) => {
     res.render('index', {
       message: 'Hello,',
       username: req.cookies.user
     });
   });
 
-  app.get('/fail', function (req, res) {
+  app.get('/fail', (req, res) => {
     res.render('failer');
   });
 
-  hbs.registerAsyncHelper('user', function(username, resultcb) {
-    setTimeout(function() {
+  hbs.registerAsyncHelper('user', (username, resultcb) => {
+    setTimeout(() => {
       resultcb(username);
     }, getRandomNumber(100, 900))
   });
 
   hbs.registerAsyncHelper('pages', function(options, resultcb) {
-    var self = this;
-    setTimeout(function() {
-      var result = [];
-      for(var i = 0; i < pages.length; i++) {
+    const self = this;
+    setTimeout(() => {
+      const result = [];
+      for (let i = 0; i < pages.length; i++) {
         options.data.page = pages[i];
         result.push(options.fn.call(self, pages[i], options));
       }
@@ -102,11 +100,10 @@ function create(hbs, env) {
     }, getRandomNumber(100, 900))
   });
 
-  hbs.registerAsyncHelper('comments', function(options, resultcb) {
-    var self = this;
-    setTimeout(function() {
-      var result = [];
-      for(var i = 0; i < comments.length; i++) {
+  hbs.registerAsyncHelper('comments', (options, resultcb) => {
+    setTimeout(() => {
+      const result = [];
+      for (let i = 0; i < comments.length; i++) {
         if (options.hash.page === comments[i].page) {
           result.push(options.fn(comments[i]));
         }
@@ -115,8 +112,8 @@ function create(hbs, env) {
     }, getRandomNumber(100, 300))
   });
 
-  hbs.registerAsyncHelper('failer', function(_, resultcb) {
-    setTimeout(function() {
+  hbs.registerAsyncHelper('failer', (_, resultcb) => {
+    setTimeout(() => {
       resultcb(options.fn());
     }, 100);
   })
@@ -124,4 +121,4 @@ function create(hbs, env) {
   return app;
 }
 
-exports.create = create;
+export { create };

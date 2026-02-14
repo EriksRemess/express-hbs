@@ -1,373 +1,276 @@
-'use strict';
-var assert = require('assert');
-var hbs = require('..');
-var path = require('path');
-var H = require('./helpers');
+import assert from 'node:assert';
+import { describe, it } from './testkit.js';
+import hbs from '../index.js';
+import { fromHere } from './fixtures/paths.js';
+import * as H from './helpers.js';
 
+const createLocals = (dirname, locals) => H.createLocals('express', dirname, locals);
 
-describe('issue-22 template', function() {
-  var dirname = path.join(__dirname, 'issues/22');
+describe('issue-22 template', () => {
+  const dirname = fromHere(import.meta.url, 'issues/22');
 
-  it('should use multiple layouts with caching', function(done) {
-    var render = hbs.create().express3({
+  it('should use multiple layouts with caching', async () => {
+    const render = hbs.create().express({
       restrictLayoutsTo: dirname
     });
-    var locals1 = H.createLocals('express3', dirname, { layout: 'layout1', cache: true });
-    var locals2 = H.createLocals('express3', dirname, { layout: 'layout2', cache: true });
+    const locals1 = createLocals(dirname, { layout: 'layout1', cache: true });
+    const locals2 = createLocals(dirname, { layout: 'layout2', cache: true });
 
-    render(dirname + '/template.hbs', locals1, function(err, html) {
-      assert.ifError(err);
-      assert.equal('<layout1>template</layout1>', H.stripWs(html));
-      render(dirname + '/template.hbs', locals2, function(err, html) {
-        assert.ifError(err);
-        assert.equal('<layout2>template</layout2>', H.stripWs(html));
-        done();
-      });
-    });
+    const html1 = await H.renderTemplate(render, dirname + '/template.hbs', locals1);
+    const html2 = await H.renderTemplate(render, dirname + '/template.hbs', locals2);
+
+    assert.equal('<layout1>template</layout1>', H.stripWs(html1));
+    assert.equal('<layout2>template</layout2>', H.stripWs(html2));
   });
 });
 
-describe('issue-23', function() {
-  var dirname =  path.join(__dirname, 'issues/23');
+describe('issue-23', () => {
+  const dirname = fromHere(import.meta.url, 'issues/23');
+  const renderOptions = { cache: true, settings: { views: dirname + '/views' } };
 
-  it('should not pass an empty or missing partial to handlebars', function(done) {
-    var render = hbs.create().express3({
+  it('should not pass an empty or missing partial to handlebars', async () => {
+    const render = hbs.create().express({
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
-
-    function check(err, html) {
-      assert.ifError(err);
-      assert.equal('<html>Hello</html>', H.stripWs(html));
-      done();
-    }
-    var result = render(dirname + '/index.hbs', {cache: true, settings: {views: dirname + '/views'}}, check);
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', renderOptions);
+    assert.equal('<html>Hello</html>', H.stripWs(html));
   });
 
-  it('should handle empty string', function(done) {
-    var render = hbs.create().express3({
+  it('should handle empty string', async () => {
+    const render = hbs.create().express({
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
-
-    function check(err, html) {
-      assert.ifError(err);
-      assert.equal('', H.stripWs(html));
-      done();
-    }
-    var result = render(dirname + '/empty.hbs', {cache: true, settings: {views: dirname + '/views'}}, check);
+    const html = await H.renderTemplate(render, dirname + '/empty.hbs', renderOptions);
+    assert.equal('', H.stripWs(html));
   });
 
-
-  it('should register empty partial', function(done) {
-    var hb = hbs.create();
-    var render = hb.express3({
+  it('should register empty partial', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
     hb.handlebars.registerPartial('emptyPartial', '');
 
-    var pass = 0;
-    function check(err, html) {
-      pass++;
-      assert.ifError(err);
+    for (let i = 0; i < 3; i += 1) {
+      const html = await H.renderTemplate(render, dirname + '/emptyPartial.hbs', renderOptions);
       assert.equal('foo', H.stripWs(html));
-      if (pass < 3) {
-        doIt();
-      } else {
-        done();
-      }
     }
-    function doIt() {
-      render(dirname + '/emptyPartial.hbs', {cache: true, settings: {views: dirname + '/views'}}, check);
-    }
-    doIt();
   });
 
-  it('should register partial that results in empty string (comment)', function(done) {
-    var hb = hbs.create();
-    var render = hb.express3({
+  it('should register partial that results in empty string (comment)', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
-    // this fails
-    //hb.handlebars.registerPartial('emptyComment', '{{! just a comment}}');
     hb.registerPartial('emptyComment', '{{! just a comment}}');
 
-    var pass = 0;
-    function check(err, html) {
-      pass++;
-      assert.ifError(err);
+    for (let i = 0; i < 3; i += 1) {
+      const html = await H.renderTemplate(render, dirname + '/emptyComment.hbs', renderOptions);
       assert.equal('foo', H.stripWs(html));
-      if (pass < 3) {
-        doIt();
-      } else {
-        done();
-      }
     }
-    function doIt() {
-      render(dirname + '/emptyComment.hbs', {cache: true, settings: {views: dirname + '/views'}}, check);
-    }
-    doIt();
   });
 });
 
-
-describe('issue-21', function() {
-  var dirname =  path.join(__dirname, 'issues/21');
-  var render = hbs.create().express3({
+describe('issue-21', () => {
+  const dirname = fromHere(import.meta.url, 'issues/21');
+  const render = hbs.create().express({
     layoutsDir: dirname + '/views/layouts',
     restrictLayoutsTo: dirname
   });
 
-  it('should allow specifying layouts without the parent dir', function(done) {
-    function check(err, html) {
-      assert.ifError(err);
-      assert.equal('<html>index</html>', H.stripWs(html));
-      done();
-    }
-
-    var options = {cache: true, layout: 'default', settings: {views: dirname + '/views'}};
-    var result = render(dirname + '/views/index.hbs', options, check);
+  it('should allow specifying layouts without the parent dir', async () => {
+    const options = { cache: true, layout: 'default', settings: { views: dirname + '/views' } };
+    const html = await H.renderTemplate(render, dirname + '/views/index.hbs', options);
+    assert.equal('<html>index</html>', H.stripWs(html));
   });
 
-
-  it('should allow specifying layouts without the parent dir in a sub view', function(done) { function check(err, html) {
-    assert.ifError(err);
+  it('should allow specifying layouts without the parent dir in a sub view', async () => {
+    const options = { cache: true, layout: 'default', settings: { views: dirname + '/views' } };
+    const html = await H.renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
     assert.equal('<html>sub</html>', H.stripWs(html));
-    done();
-  }
-
-  var options = {cache: true, layout: 'default', settings: {views: dirname + '/views'}};
-  var result = render(dirname + '/views/sub/sub.hbs', options, check);
   });
 
-  it('should treat layouts that start with "." relative to template', function(done) { function check(err, html) {
-    assert.ifError(err);
+  it('should treat layouts that start with "." relative to template', async () => {
+    const options = { cache: true, layout: './relativeLayout', settings: { views: dirname + '/views' } };
+    const html = await H.renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
     assert.equal('<relative>sub</relative>', H.stripWs(html));
-    done();
-  }
-
-  var options = {cache: true, layout: './relativeLayout', settings: {views: dirname + '/views'}};
-  var result = render(dirname + '/views/sub/sub.hbs', options, check);
   });
 
-  it('should allow layouts in subfolders', function(done) {
-    function check(err, html) {
-      assert.ifError(err);
-      assert.equal('<sub>useLayoutInDir</sub>', H.stripWs(html));
-      done();
-    }
-
-    var options = {cache: true, layout: 'sub/child', settings: {views: dirname + '/views'}};
-    var result = render(dirname + '/views/useLayoutInDir.hbs', options, check);
+  it('should allow layouts in subfolders', async () => {
+    const options = { cache: true, layout: 'sub/child', settings: { views: dirname + '/views' } };
+    const html = await H.renderTemplate(render, dirname + '/views/useLayoutInDir.hbs', options);
+    assert.equal('<sub>useLayoutInDir</sub>', H.stripWs(html));
   });
 
-  it('should treat layouts relative to views directory if layoutsDir is not passed', function(done) {
-    var dirname =  path.join(__dirname, 'issues/21');
-    var render = hbs.create().express3({
+  it('should treat layouts relative to views directory if layoutsDir is not passed', async () => {
+    const localRender = hbs.create().express({
       restrictLayoutsTo: dirname
     });
-
-    function check(err, html) {
-      assert.ifError(err);
-      assert.equal('<sub>sub</sub>', H.stripWs(html));
-      done();
-    }
-
-    var options = {cache: true, layout: 'layouts/sub/child', settings: {views: dirname + '/views'}};
-    var result = render(dirname + '/views/sub/sub.hbs', options, check);
+    const options = { cache: true, layout: 'layouts/sub/child', settings: { views: dirname + '/views' } };
+    const html = await H.renderTemplate(localRender, dirname + '/views/sub/sub.hbs', options);
+    assert.equal('<sub>sub</sub>', H.stripWs(html));
   });
 });
 
+describe('issue-49', () => {
+  const dirname = fromHere(import.meta.url, 'issues/49');
 
-describe('issue-49', function() {
-  var dirname =  path.join(__dirname, 'issues/49');
-
-  it('should report filename with error', function(done) {
-    var hb = hbs.create()
-    var render = hb.express3({
+  it('should report filename with error', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/error.hbs', locals, function(err, html) {
-      assert(err.stack.indexOf('[error.hbs]') > 0);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const result = await H.renderTemplateResult(render, dirname + '/error.hbs', locals);
+    assert(result.err.stack.includes('[error.hbs]'));
   });
 
-  it('should report relative filename with error', function(done) {
-    var hb = hbs.create()
-    var render = hb.express3({
+  it('should report relative filename with error', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/front/error.hbs', locals, function(err, html) {
-      assert(err.stack.indexOf('[front/error.hbs]') > 0);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const result = await H.renderTemplateResult(render, dirname + '/front/error.hbs', locals);
+    assert(result.err.stack.includes('[front/error.hbs]'));
   });
 
-  it('should report filename with partial error', function(done) {
-    var hb = hbs.create()
-    var render = hb.express3({
+  it('should report filename with partial error', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       partialsDir: dirname + '/partials',
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/partial.hbs', locals, function(err, html) {
-      assert(err.stack.indexOf('[partial.hbs]') > 0);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const result = await H.renderTemplateResult(render, dirname + '/partial.hbs', locals);
+    assert(result.err.stack.includes('[partial.hbs]'));
   });
 
-  it('should report filename with layout error', function(done) {
-    var hb = hbs.create()
-    var render = hb.express3({
+  it('should report filename with layout error', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       partialsDir: dirname + '/partials',
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/index.hbs', locals, function(err, html) {
-      assert(err.stack.indexOf('[layouts/default.hbs]') > 0);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const result = await H.renderTemplateResult(render, dirname + '/index.hbs', locals);
+    assert(result.err.stack.includes('[layouts/default.hbs]'));
   });
 });
 
-describe('issue-53', function() {
-  var dirname =  path.join(__dirname, 'issues/53');
+describe('issue-53', () => {
+  const dirname = fromHere(import.meta.url, 'issues/53');
 
-  it('should use block with async helpers', function(done) {
-    var hb = hbs.create()
-    var res = 0;
-    hb.registerAsyncHelper('weird', function(_, resultcb) {
-      setTimeout(function() {
+  it('should use block with async helpers', async () => {
+    const hb = hbs.create();
+    let res = 0;
+    hb.registerAsyncHelper('weird', (_, resultcb) => {
+      setTimeout(() => {
         resultcb(++res);
-      }, 1)
+      }, 1);
     });
-    var render = hb.express3({
+    const render = hb.express({
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/index.hbs', locals, function(err, html) {
-      assert.ifError(err);
-      assert.ok(html.indexOf('__aSyNcId_') < 0);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.ok(!html.includes('__aSyNcId_'));
   });
 });
 
-describe('issue-59', function() {
-  var dirname = __dirname + '/issues/59';
-  it('should escape or not', function (done) {
-    var hb = hbs.create();
+describe('issue-59', () => {
+  const dirname = fromHere(import.meta.url, 'issues/59');
 
-    function async(s, cb) {
+  it('should escape or not', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('async', (s, cb) => {
       cb('<strong>' + s + '</strong>');
-    }
+    });
 
-    hb.registerAsyncHelper("async", async);
-
-    var render = hb.express3({
+    const render = hb.express({
       viewsDir: dirname,
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname);
-
-    render(dirname + '/index.hbs', locals, function (err, html) {
-      assert.equal(H.stripWs(html), '&lt;strong&gt;foo&lt;/strong&gt;<strong>foo</strong>');
-      done();
-    });
+    const locals = createLocals(dirname);
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal(H.stripWs(html), '&lt;strong&gt;foo&lt;/strong&gt;<strong>foo</strong>');
   });
-  it('should not escape SafeString', function (done) {
-    var hb = hbs.create();
 
-    function async(s, cb) {
+  it('should not escape SafeString', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('async', (s, cb) => {
       cb(new hb.SafeString('<em>' + s + '</em>'));
-    }
+    });
 
-    hb.registerAsyncHelper('async', async);
-
-    var render = hb.express3({
+    const render = hb.express({
       viewsDir: dirname,
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname);
-
-    render(dirname + '/index.hbs', locals, function (err, html) {
-      assert.equal(H.stripWs(html), '<em>foo</em><em>foo</em>');
-      done();
-    });
+    const locals = createLocals(dirname);
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal(H.stripWs(html), '<em>foo</em><em>foo</em>');
   });
 });
 
-describe('issue-73', function() {
-  var dirname = path.join(__dirname, 'issues/73');
-  it('should allow compile options', function(done){
-    var hb = hbs.create();
-    var render = hb.express3({
+describe('issue-73', () => {
+  const dirname = fromHere(import.meta.url, 'issues/73');
+
+  it('should allow compile options', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       viewsDir: dirname,
       partialsDir: dirname + '/partials',
       restrictLayoutsTo: dirname,
       onCompile: function(eh, source, filename) {
-        var options;
+        let options;
         if (filename && filename.indexOf('partials')) {
-          options = {preventIndent: true};
+          options = { preventIndent: true };
         }
         return eh.handlebars.compile(source, options);
       }
     });
 
-    var locals = H.createLocals('express3', dirname);
-    render(dirname + '/index.hbs', locals, function (err, html) {
-      if (err) return console.log('error', err);
-
-      assert.ifError(err);
-      assert.ok(html.match(/^Hello/m));
-      assert.ok(html.match(/^second line/m));
-      done();
-    });
+    const locals = createLocals(dirname);
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.ok(html.match(/^Hello/m));
+    assert.ok(html.match(/^second line/m));
   });
 });
 
+describe('issue-62', () => {
+  const dirname = fromHere(import.meta.url, 'issues/62');
 
-describe('issue-62', function() {
-  var dirname = path.join(__dirname, 'issues/62');
-
-  it('should provide options for async helpers', function (done) {
-    var hb = hbs.create();
-
-    function async(c, o, cb) {
+  it('should provide options for async helpers', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('async', (c, o, cb) => {
       if (o.hash.type === 'em') {
         cb('<em>' + c + '</em>');
       } else {
         cb('<strong>' + c + '</strong>');
       }
-    }
+    });
 
-    hb.registerAsyncHelper("async", async);
-
-    var render = hb.express3({
+    const render = hb.express({
       viewsDir: dirname,
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname);
+    const locals = createLocals(dirname);
+    const html = await H.renderTemplate(render, dirname + '/basic.hbs', locals);
 
-    render(dirname + '/basic.hbs', locals, function (err, html) {
-      assert.equal(
-        H.stripWs(html),
-        '&lt;strong&gt;foo&lt;/strong&gt;&lt;em&gt;foo&lt;/em&gt;'
-      );
-      done();
-    });
+    assert.equal(
+      H.stripWs(html),
+      '&lt;strong&gt;foo&lt;/strong&gt;&lt;em&gt;foo&lt;/em&gt;'
+    );
   });
 
-  it('should allow for block async helpers', function (done) {
-    var hb = hbs.create();
-
-    function async(c, o, cb) {
-      var self = this;
+  it('should allow for block async helpers', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('async', function(c, o, cb) {
+      const self = this;
       self.output = c;
 
       if (o.hash.inverse === 'true') {
@@ -375,102 +278,189 @@ describe('issue-62', function() {
       } else {
         cb(o.fn(self));
       }
-    }
+    });
 
-    hb.registerAsyncHelper("async", async);
-
-    var render = hb.express3({
+    const render = hb.express({
       viewsDir: dirname,
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname);
+    const locals = createLocals(dirname);
+    const html = await H.renderTemplate(render, dirname + '/block.hbs', locals);
 
-    render(dirname + '/block.hbs', locals, function (err, html) {
-      assert.equal(
-        H.stripWs(html),
-        '<p>GoodbyeWorld</p><p>HelloHandlebars</p>'
-      );
-      done();
-    });
+    assert.equal(
+      H.stripWs(html),
+      '<p>GoodbyeWorld</p><p>HelloHandlebars</p>'
+    );
   });
 });
 
-describe('issue-76', function() {
-  var dirname =  path.join(__dirname, 'issues/76');
+describe('issue-76', () => {
+  const dirname = fromHere(import.meta.url, 'issues/76');
 
-  it('should allow cachePartials to be called independently of render', function (done) {
-    var hb = hbs.create();
-
-    var render = hb.express3({
+  it('should allow cachePartials to be called independently of render', async () => {
+    const hb = hbs.create();
+    hb.express({
       partialsDir: dirname,
       restrictLayoutsTo: dirname
     });
 
-    hb.cachePartials(function (err) {
-      assert.ifError(err);
-      assert.ok(true);
-      done();
+    await new Promise((resolve, reject) => {
+      hb.cachePartials((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
     });
+
+    assert.ok(true);
   });
 });
 
-describe('issue-84', function () {
-  var dirname =  path.join(__dirname, 'issues/84');
+describe('issue-84', () => {
+  const dirname = fromHere(import.meta.url, 'issues/84');
 
-  it('should render deeply nested partials', function (done) {
-    var render = hbs.create().express3({
+  it('should render deeply nested partials', async () => {
+    const render = hbs.create().express({
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
 
-    function check(err, html) {
-      if (err) {
-        done(err);
-      }
-      assert.equal('<div>Testing3levelsdown</div>', H.stripWs(html));
-      done();
-    }
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', {
+      cache: true,
+      settings: { views: dirname + '/views' }
+    });
 
-    render(dirname + '/index.hbs', {cache: true, settings: {views: dirname + '/views'}}, check);
+    assert.equal('<div>Testing3levelsdown</div>', H.stripWs(html));
   });
 });
 
-describe('issue-144', function() {
-  var dirname =  path.join(__dirname, 'issues/144');
+describe('issue-144', () => {
+  const dirname = fromHere(import.meta.url, 'issues/144');
 
-  it('should repalce with async helpers even special string like $\'', function(done) {
-    var hb = hbs.create()
-    hb.registerAsyncHelper('special_string', function(_, resultcb) {
-      setTimeout(function() {
+  it('should repalce with async helpers even special string like $\'', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('special_string', (_, resultcb) => {
+      setTimeout(() => {
         resultcb(new hbs.SafeString('<p><code>\'$example$\'</code> abcd</p>'));
-      }, 1)
+      }, 1);
     });
-    var render = hb.express3({
+
+    const render = hb.express({
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, {});
-    render(dirname + '/index.hbs', locals, function(err, html) {
-      assert.equal('<div><p><code>\'$example$\'</code> abcd</p></div>\n', html);
-      done();
-    });
+    const locals = createLocals(dirname, {});
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal('<div><p><code>\'$example$\'</code> abcd</p></div>\n', html);
   });
 });
 
-describe('issue-153', function() {
-  var dirname = path.join(__dirname, 'issues/153');
-  it('should concat contentFor blocks with newline', function(done) {
-    var check = function (err, html) {
-      if (err) {
-        done(err);
-      }
-      assert.equal('1\n2', html.trim());
-      done();
-    }
-    var hb = hbs.create()
-    var render = hb.express3({
+describe('issue-153', () => {
+  const dirname = fromHere(import.meta.url, 'issues/153');
+
+  it('should concat contentFor blocks with newline', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
       restrictLayoutsTo: dirname
     });
-    var locals = H.createLocals('express3', dirname, { });
-    render(dirname + '/index.hbs', locals, check);
+    const locals = createLocals(dirname, {});
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal('1\n2', html.trim());
+  });
+});
+
+describe('issue-270', () => {
+  const dirname = fromHere(import.meta.url, 'issues/270');
+  const viewsDir = dirname + '/views';
+  const indexFile = viewsDir + '/index.hbs';
+
+  it('should allow absolute layout paths inside restrictLayoutsTo', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
+      restrictLayoutsTo: viewsDir
+    });
+    const locals = createLocals(viewsDir, {
+      cache: true,
+      layout: viewsDir + '/layouts/default.hbs'
+    });
+
+    const html = await H.renderTemplate(render, indexFile, locals);
+    assert.equal(H.stripWs(html), '<layout>Hello</layout>');
+  });
+
+  it('should reject absolute layout paths outside restrictLayoutsTo', async () => {
+    const hb = hbs.create();
+    const render = hb.express({
+      restrictLayoutsTo: viewsDir
+    });
+    const locals = createLocals(viewsDir, {
+      cache: true,
+      layout: dirname + '/outside/default.hbs'
+    });
+
+    const result = await H.renderTemplateResult(render, indexFile, locals);
+    assert(result.err);
+    assert(result.err.message.includes('does not reside in'));
+  });
+});
+
+describe('issue-160', () => {
+  const dirname = fromHere(import.meta.url, 'issues/160');
+
+  it('should pass handlebars options to async helpers with multiple arguments', async () => {
+    const hb = hbs.create();
+    hb.registerAsyncHelper('someAsyncHelper', (arg1, arg2, options, done) => {
+      const key = options.hash.key || 'none';
+      done(`${arg1}:${arg2}:${key}`);
+    });
+    hb.registerAsyncHelper('someAsyncBlock', function(arg1, arg2, options, done) {
+      done(new hb.SafeString(`<b>${arg1}:${arg2}:${options.hash.key}:${options.fn(this)}</b>`));
+    });
+
+    const render = hb.express({
+      viewsDir: dirname,
+      restrictLayoutsTo: dirname
+    });
+    const locals = createLocals(dirname, {});
+    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+
+    assert.equal(
+      H.stripWs(html),
+      'first:second:valone:two:none<b>left:right:z:block</b>'
+    );
+  });
+});
+
+describe('issue-161', () => {
+  const dirname = fromHere(import.meta.url, 'issues/161');
+  const templateFile = dirname + '/default.hbs';
+  const indexFile = dirname + '/index.hbs';
+
+  const createRender = () => hbs.create().express({
+    viewsDir: dirname,
+    restrictLayoutsTo: dirname
+  });
+
+  it('should render same file as template then as layout with cache enabled', async () => {
+    const render = createRender();
+    const locals = createLocals(dirname, { cache: true });
+
+    const html1 = await H.renderTemplate(render, templateFile, locals);
+    const html2 = await H.renderTemplate(render, indexFile, locals);
+
+    assert.equal(H.stripWs(html1), '<default></default>');
+    assert.equal(H.stripWs(html2), '<default><index>ok</index></default>');
+  });
+
+  it('should render same file as layout then as template with cache enabled', async () => {
+    const render = createRender();
+    const locals = createLocals(dirname, { cache: true });
+
+    const html1 = await H.renderTemplate(render, indexFile, locals);
+    const html2 = await H.renderTemplate(render, templateFile, locals);
+
+    assert.equal(H.stripWs(html1), '<default><index>ok</index></default>');
+    assert.equal(H.stripWs(html2), '<default></default>');
   });
 });

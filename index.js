@@ -1,1 +1,1 @@
-module.exports = require('./lib/hbs');
+export {default} from './lib/hbs.js';

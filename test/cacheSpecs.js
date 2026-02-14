@@ -1,138 +1,105 @@
-var request = require('supertest');
-var path = require('path');
-var rewire = require('rewire');
-var assert = require('assert');
-var fs = require('fs');
+import assert from 'node:assert';
+import path from 'node:path';
+import { describe, it } from './testkit.js';
+import fs from 'node:fs/promises';
+import hbs from '../index.js';
+import { create as createExampleApp } from '../example/app.js';
+import { dirnameFromMeta } from './fixtures/paths.js';
+import { request } from './http.js';
 
+const __dirname = dirnameFromMeta(import.meta.url);
 
-/**
- * Creates instance of example app using an injected version of express-hbs to track the number of times a
- * file is read. Additionally, the $NODE_ENV environment variable may be set.
- *
- * @param env
- * @returns {{app: hbs, readCounts: {}}}
- */
-function createApp(env) {
-  var readCounts = {};
-  var hbs = rewire('../lib/hbs');
-  hbs.__set__('fs', {
-    readFileSync: function(filename, encoding) {
-      if (typeof readCounts[filename] === 'undefined') {
-        readCounts[filename] = 1;
-      } else {
-        readCounts[filename] += 1;
-      }
-
-      return fs.readFileSync(filename, encoding);
-    },
-
-    readFile: function(filename, encoding, cb) {
-      if (typeof readCounts[filename] === 'undefined') {
-        readCounts[filename] = 1;
-      } else {
-        readCounts[filename] += 1;
-      }
-
-      fs.readFile(filename, encoding, cb);
-    },
-    existsSync: function(filename, encoding) {
-      return fs.existsSync(filename, encoding);
-    }
-  });
-
-  // used mocked hbs in example
-  var example = require('../example/app');
-  var app = example.create(hbs, env);
-  return {app: app, readCounts: readCounts};
+function incrementCount(readCounts, filename) {
+  const key = path.resolve(filename);
+  if (typeof readCounts[key] === 'undefined') {
+    readCounts[key] = 1;
+  } else {
+    readCounts[key] += 1;
+  }
 }
 
+function createPatchedFs(readCounts, originalPromisesReadFile) {
+  return {
+    promisesReadFile: function(filename, encoding) {
+      incrementCount(readCounts, filename);
+      return originalPromisesReadFile(filename, encoding);
+    }
+  };
+}
 
-describe('express-hbs', function() {
-  describe('cache', function() {
+async function withPatchedFs(readCounts, run) {
+  const originalPromisesReadFile = fs.readFile;
+  const patchedFs = createPatchedFs(readCounts, originalPromisesReadFile);
 
-    it('should not cache layout in `development`', function(done) {
-      var mock = createApp('development');
+  fs.readFile = patchedFs.promisesReadFile;
 
-      request(mock.app)
-        .get('/')
-        .end(function(err) {
-          assert.ifError(err);
+  try {
+    await run();
+  } finally {
+    fs.readFile = originalPromisesReadFile;
+  }
+}
 
-          request(mock.app)
-            .get('/')
-            .expect(/DEFAULT LAYOUT/)
-            .end(function(err) {
-              assert.ifError(err);
+const createApp = (env) => createExampleApp( hbs.create(), env );
 
-              var filename = path.resolve(__dirname, '../example/views/layout/default.hbs');
-              assert.equal(mock.readCounts[filename], 2);
-              done();
-            });
-        });
+describe('express-hbs', () => {
+  describe('cache', () => {
+    it('should not cache layout in `development`', async () => {
+      const readCounts = {};
+      const app = createApp('development');
+
+      await withPatchedFs(readCounts, async () => {
+        await request(app, '/');
+        const res = await request(app, '/');
+        assert.match(res.text, /DEFAULT LAYOUT/);
+      });
+
+      const filename = path.resolve(__dirname, '../example/views/layout/default.hbs');
+      assert.equal(readCounts[filename], 2);
     });
 
-    it('should cache layout in `production` reading file once', function(done) {
-      var mock = createApp('production');
+    it('should cache layout in `production` reading file once', async () => {
+      const readCounts = {};
+      const app = createApp('production');
 
-      // reads layout from fs once
-      request(mock.app)
-        .get('/')
-        .end(function(err) {
-          assert.ifError(err);
+      await withPatchedFs(readCounts, async () => {
+        await request(app, '/');
+        const res = await request(app, '/');
+        assert.match(res.text, /DEFAULT LAYOUT/);
+      });
 
-          request(mock.app)
-            .get('/')
-            .expect(/DEFAULT LAYOUT/)
-            .end(function(err, res) {
-              assert.ifError(err);
-
-              var filename = path.resolve(__dirname, '../example/views/layout/default.hbs');
-              assert.equal(mock.readCounts[filename], 1);
-              done();
-            });
-        });
+      const filename = path.resolve(__dirname, '../example/views/layout/default.hbs');
+      assert.equal(readCounts[filename], 1);
     });
 
-    it('should not cache partials in `development`', function(done) {
-      var mock = createApp('development');
+    it('should not cache partials in `development`', async () => {
+      const readCounts = {};
+      const app = createApp('development');
 
-      request(mock.app)
-        .get('/veggies')
-        .expect(/just a comment/)
-        .end(function(err) {
-          assert.ifError(err);
-          request(mock.app)
-            .get('/veggies')
-            .expect(/just a comment/)
-            .end(function(err) {
-              assert.ifError(err);
+      await withPatchedFs(readCounts, async () => {
+        const res1 = await request(app, '/veggies');
+        assert.match(res1.text, /just a comment/);
+        const res2 = await request(app, '/veggies');
+        assert.match(res2.text, /just a comment/);
+      });
 
-              var filename = path.resolve(__dirname, '../example/views/partials/sub/comment.hbs');
-              assert.equal(mock.readCounts[filename], 2);
-              done();
-            });
-        });
+      const filename = path.resolve(__dirname, '../example/views/partials/sub/comment.hbs');
+      assert.equal(readCounts[filename], 2);
     });
 
-    it('should cache partials in `production', function (done) {
-      var mock = createApp('production');
+    it('should cache partials in `production`', async () => {
+      const readCounts = {};
+      const app = createApp('production');
 
-      request(mock.app)
-        .get('/veggies')
-        .expect(/just a comment/)
-        .end(function(err) {
-          assert.ifError(err);
-          request(mock.app)
-            .get('/veggies')
-            .expect(/just a comment/)
-            .end(function(err) {
-              assert.ifError(err);
+      await withPatchedFs(readCounts, async () => {
+        const res1 = await request(app, '/veggies');
+        assert.match(res1.text, /just a comment/);
+        const res2 = await request(app, '/veggies');
+        assert.match(res2.text, /just a comment/);
+      });
 
-              var filename = path.resolve(__dirname, '../example/views/partials/sub/comment.hbs');
-              assert.equal(mock.readCounts[filename], 1);
-              done();
-            });
-        });
+      const filename = path.resolve(__dirname, '../example/views/partials/sub/comment.hbs');
+      assert.equal(readCounts[filename], 1);
     });
   });
 });

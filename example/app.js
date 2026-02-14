@@ -1,24 +1,44 @@
-'use strict';
-// npm install express express-hbs
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import express from 'express';
+import hbsDefault from '../index.js';
 
-function create(hbs, env) {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const relative = (filePath) => path.join( __dirname, filePath );
+
+function isMainModule() {
+  if (!process.argv[1]) {
+    return false;
+  }
+  return import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+function startServer(app, port = 3000) {
+  const server = app.listen(port, () => {
+    console.log(`Express server listening on port ${port}`);
+  });
+
+  server.on('error', (err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+
+  return server;
+}
+
+export function create(hbs, env) {
   if (env) process.env.NODE_ENV = env;
 
-  var express = require('express');
-  var app = express();
-  var fs = require('fs');
-  var fp = require('path');
-
-  function relative(path) {
-    return fp.join(__dirname, path);
-  }
-
-  var viewsDir = relative('views');
+  const app = express();
+  const viewsDir = relative('views');
 
   app.use(express.static(relative('public')));
 
   // Hook in express-hbs and tell it where known directories reside
-  app.engine('hbs', hbs.express4({
+  app.engine('hbs', hbs.express({
     partialsDir: [relative('views/partials'), relative('views/partials-other')],
     defaultLayout: relative('views/layout/default.hbs'),
     restrictLayoutsTo: viewsDir
@@ -27,9 +47,9 @@ function create(hbs, env) {
   app.set('views', viewsDir);
 
   // Register sync helper
-  hbs.registerHelper('link', function(text, options) {
-    var attrs = [];
-    for (var prop in options.hash) {
+  hbs.registerHelper('link', (text, options) => {
+    const attrs = [];
+    for (const prop in options.hash) {
       attrs.push(prop + '="' + options.hash[prop] + '"');
     }
     return new hbs.SafeString(
@@ -37,60 +57,63 @@ function create(hbs, env) {
     );
   });
 
-  // Register Async helpers
-  hbs.registerAsyncHelper('readFile', function(filename, cb) {
-    fs.readFile(fp.join(viewsDir, filename), 'utf8', function(err, content) {
-      if (err) console.error(err);
-      cb(new hbs.SafeString(content));
-    });
+  // Register async helpers
+  hbs.registerAsyncHelper('readFile', async (filename, cb) => {
+    let content;
+    try {
+      content = await readFile(path.join(viewsDir, filename), 'utf8');
+    } catch (err) {
+      console.error(err);
+    }
+    cb(new hbs.SafeString(content));
   });
 
-  var fruits = [
-    {name: 'apple'},
-    {name: 'orange'},
-    {name: 'pear'}
+  const fruits = [
+    { name: 'apple' },
+    { name: 'orange' },
+    { name: 'pear' }
   ];
 
-  var veggies = [
-    {name: 'asparagus'},
-    {name: 'carrot'},
-    {name: 'spinach'}
+  const veggies = [
+    { name: 'asparagus' },
+    { name: 'carrot' },
+    { name: 'spinach' }
   ];
 
-  app.get('/', function(req, res) {
+  app.get('/', (req, res) => {
     res.render('index', {
       title: 'express-hbs example'
     });
   });
 
-  app.get('/replace', function(req, res) {
+  app.get('/replace', (req, res) => {
     res.render('replace', {
       title: 'express-hbs example'
     });
   });
 
-  app.get('/fruits', function(req, res) {
+  app.get('/fruits', (req, res) => {
     res.render('fruits/index', {
       title: 'My favorite fruits',
-      fruits: fruits
+      fruits
     });
   });
 
-  app.get('/fruits/:name', function(req, res) {
+  app.get('/fruits/:name', (req, res) => {
     res.render('fruits/details', {
       fruit: req.params.name
     });
   });
 
-  app.get('/veggies', function(req, res) {
+  app.get('/veggies', (req, res) => {
     res.render('veggies', {
       title: 'My favorite veggies',
-      veggies: veggies,
+      veggies,
       layout: 'layout/veggie'
     });
   });
 
-  app.get('/veggies/:name', function(req, res) {
+  app.get('/veggies/:name', (req, res) => {
     res.render('veggies/details', {
       veggie: req.params.name,
       layout: 'layout/veggie-details'
@@ -100,11 +123,8 @@ function create(hbs, env) {
   return app;
 }
 
-if (require.main === module) {
-  var hbs = require('..');
-  var app = create(hbs);
-  app.listen(3000);
-  console.log('Express server listening on port 3000');
-} else {
-  exports.create = create;
+if (isMainModule()) {
+  startServer(create(hbsDefault));
 }
+
+export default create;

@@ -1,23 +1,27 @@
-var request = require('supertest');
-var assert = require('assert');
-var path = require('path');
-var hbs = require('..');
+import assert from 'node:assert';
+import path from 'node:path';
+import { beforeEach, describe, it } from './testkit.js';
+import hbs from '../index.js';
+import layoutsDirApp from '../example/app-layoutsDir.js';
+import { dirnameFromMeta } from './fixtures/paths.js';
+import * as H from './helpers.js';
+import { request } from './http.js';
+
+const __dirname = dirnameFromMeta(import.meta.url);
 
 
-function stripWs(s) {
-  return s.replace(/\s+/g, '');
-}
+const stripWs = (s) => s.replace( /\s+/g, '' );
 
 function createLocals(which, viewsDir, locals) {
   if (!locals) locals = {};
-  var opts = {};
-  if (which === 'express3') {
+  const opts = {};
+  if (which === 'express') {
     opts.settings = {
       views: viewsDir
     };
     opts.cache = process.env.NODE_ENV === 'production';
     opts.settings.views = viewsDir;
-    for (var k in locals) {
+    for (const k in locals) {
       if (!locals.hasOwnProperty(k)) continue;
       opts[k] = locals[k];
     }
@@ -25,93 +29,101 @@ function createLocals(which, viewsDir, locals) {
   return opts;
 }
 
-describe('layouts', function() {
-  var app;
+describe('layouts', () => {
+  describe('layoutsDir', () => {
+    let app;
 
-  beforeEach(function() {
-    var example = require('../example/app');
-    app = example.create(hbs.create());
+    beforeEach(() => {
+      app = layoutsDirApp;
+    });
+
+    it('should render layout declared in markup', async () => {
+      const res = await request(app, '/fruits');
+      assert.match(res.text, /DECLARATIVE LAYOUT/);
+    });
+
+    it('should render root route with helpers', async () => {
+      const res = await request(app, '/');
+      assert.match(res.text, /Terms of Service/);
+      assert.match(res.text, /Vegetables/);
+    });
+
+    it('should allow specifying layout in locals without dir', async () => {
+      const res = await request(app, '/veggies');
+      assert.match(res.text, /PROGRAMMATIC LAYOUT/);
+    });
+
+    it('should still allow specifying layout in locals with dir', async () => {
+      const res = await request(app, '/veggies/explicit-dir');
+      assert.match(res.text, /PROGRAMMATIC LAYOUT/);
+    });
+
+    it('should render dynamic details routes', async () => {
+      const fruitRes = await request(app, '/fruits/banana');
+      assert.match(fruitRes.text, /banana/);
+
+      const veggieRes = await request(app, '/veggies/celery');
+      assert.match(veggieRes.text, /celery/);
+      assert.match(veggieRes.text, /NESTED LAYOUT/);
+    });
+
+    it('should render declarative layouts when layoutsDir is an array', async () => {
+      const exampleViews = path.join(__dirname, '../example/views');
+      const render = hbs.create().express({
+        partialsDir: [path.join(exampleViews, 'partials'), path.join(exampleViews, 'partials-other')],
+        layoutsDir: [path.join(exampleViews, 'layout')],
+        restrictLayoutsTo: path.join(exampleViews, 'layout')
+      });
+      const locals = createLocals('express', exampleViews, {
+        cache: true,
+        title: 'My favorite fruits',
+        fruits: [{ name: 'apple' }]
+      });
+      const html = await H.renderTemplate(render, path.join(exampleViews, 'fruits/index-layoutsDir.hbs'), locals);
+      assert.match(html, /DECLARATIVE LAYOUT/);
+    });
   });
 
 
-  describe('layoutsDir', function() {
-    var app;
+  describe('options.layout', () => {
+    const dirname = __dirname + '/views/disableLayoutDirective';
 
-    beforeEach(function() {
-      app = require('../example/app-layoutsDir');
-    });
-
-    it('should render layout declared in markup', function(done) {
-      request(app)
-        .get('/fruits')
-        .expect(/DECLARATIVE LAYOUT/, done);
-    });
-
-    it('should allow specifying layout in locals without dir', function(done) {
-      request(app)
-        .get('/veggies')
-        .expect(/PROGRAMMATIC LAYOUT/, done);
-    });
-
-    it('should still allow specifying layout in locals with dir', function(done) {
-      request(app)
-        .get('/veggies/explicit-dir')
-        .expect(/PROGRAMMATIC LAYOUT/, done);
-    });
-  });
-
-
-  describe('options.layout', function() {
-    var dirname = __dirname + '/views/disableLayoutDirective';
-
-    it ('should process template-specified layout without option', function(done) {
-      var render = hbs.create().express3({
+    it('should process template-specified layout without option', async () => {
+      const render = hbs.create().express({
         restrictLayoutsTo: dirname
       });
-      var locals = createLocals('express3', dirname);
-
-      render(dirname + '/index.hbs', locals, function(err, html) {
-        assert.equal('<dld>dld</dld>', stripWs(html));
-        done();
-      });
+      const locals = createLocals('express', dirname);
+      const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+      assert.equal('<dld>dld</dld>', stripWs(html));
     });
 
-    it ('should allow options.layout to be specified', function(done) {
-      var render = hbs.create().express3({
+    it('should allow options.layout to be specified', async () => {
+      const render = hbs.create().express({
         restrictLayoutsTo: dirname
       });
-      var locals = createLocals('express3', dirname, { layout: 'layouts/default' });
-
-      render(dirname + '/aside.hbs', locals, function(err, html) {
-        assert.equal('<dld>aside</dld>', stripWs(html));
-        done();
-      });
+      const locals = createLocals('express', dirname, { layout: 'layouts/default' });
+      const html = await H.renderTemplate(render, dirname + '/aside.hbs', locals);
+      assert.equal('<dld>aside</dld>', stripWs(html));
     });
 
-    it('should error when using a layout outside of the restrictLayoutsTo', function(done) {
-      var render = hbs.create().express3({
+    it('should error when using a layout outside of the restrictLayoutsTo', async () => {
+      const render = hbs.create().express({
         restrictLayoutsTo: path.resolve(path.join(__dirname, '../'))
       });
-      var locals = createLocals('express3', dirname, {layout: '/Users/egg/Code/Ghost/ghost/core/package.json'});
-
-      render(dirname + '/aside.hbs', locals, function (err, html) {
-        if (!err) {
-          return done(new Error('We expect an error when reading'));
-        }
-        return done();
-      });
+      const locals = createLocals('express', dirname, { layout: '/Users/egg/Code/Ghost/ghost/core/package.json' });
+      const result = await H.renderTemplateResult(render, dirname + '/aside.hbs', locals);
+      if (!result.err) {
+        throw new Error('We expect an error when reading');
+      }
     });
 
-    it ('should not process template-specified layout when options.layout is falsy', function(done) {
-      var render = hbs.create().express3({
+    it('should not process template-specified layout when options.layout is falsy', async () => {
+      const render = hbs.create().express({
         restrictLayoutsTo: dirname
       });
-      var locals = createLocals('express3', dirname, { layout: false });
-
-      render(dirname + '/index.hbs', locals, function(err, html) {
-        assert.equal('dld', stripWs(html));
-        done();
-      });
+      const locals = createLocals('express', dirname, { layout: false });
+      const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+      assert.equal('dld', stripWs(html));
     });
   });
 

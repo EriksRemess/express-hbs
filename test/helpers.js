@@ -1,16 +1,14 @@
-function stripWs(s) {
-  return s.replace(/\s+/g, '');
-}
+const stripWs = (s) => s.replace( /\s+/g, '' );
 
 function createLocals(which, viewsDir, locals) {
   if (!locals) locals = {};
-  var opts = {};
-  if (which === 'express3' || which === 'express4') {
+  const opts = {};
+  if (which === 'express') {
     opts.settings = {
       views: viewsDir
     };
     opts.cache = process.env.NODE_ENV === 'production';
-    for (var k in locals) {
+    for (const k in locals) {
       if (!locals.hasOwnProperty(k)) continue;
       opts[k] = locals[k];
     }
@@ -18,7 +16,29 @@ function createLocals(which, viewsDir, locals) {
   return opts;
 }
 
-module.exports = {
-  createLocals: createLocals,
-  stripWs: stripWs
+function renderTemplate(render, filename, options) {
+  return new Promise((resolve, reject) => {
+    render(filename, options, (err, html) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(html);
+    });
+  });
+}
+
+function renderTemplateResult(render, filename, options) {
+  return new Promise((resolve) => {
+    render(filename, options, (err, html) => {
+      resolve({ err: err, html: html });
+    });
+  });
+}
+
+export {
+  createLocals,
+  stripWs,
+  renderTemplate,
+  renderTemplateResult
 };

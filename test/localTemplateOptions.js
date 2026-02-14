@@ -1,17 +1,20 @@
-'use strict';
-var assert = require('assert');
-var path = require('path');
-var hbs = require('..');
-var H = require('./helpers');
+import assert from 'node:assert';
+import path from 'node:path';
+import { describe, it } from './testkit.js';
+import hbs from '../index.js';
+import { dirnameFromMeta } from './fixtures/paths.js';
+import * as H from './helpers.js';
 
-describe('local template options', function () {
-  var dirname = path.join(__dirname, 'localTemplateOptions');
+const __dirname = dirnameFromMeta(import.meta.url);
 
-  describe('express3', function () {
+describe('local template options', () => {
+  const dirname = path.join(__dirname, 'localTemplateOptions');
 
-    it('merges res.locals._templateOptions with the self._templateOptions', function (done) {
-      var instance = hbs.create();
-      var render = instance.express3({
+  describe('express', () => {
+
+    it('merges res.locals._templateOptions with the self._templateOptions', async () => {
+      const instance = hbs.create();
+      const render = instance.express({
         restrictLayoutsTo: dirname
       });
       instance.updateTemplateOptions({
@@ -22,24 +25,20 @@ describe('local template options', function () {
           } 
       });
 
-      var locals = H.createLocals('express3', dirname, {
+      const locals = H.createLocals('express', dirname, {
         _templateOptions: {
           data: {
             lastName: 'Mercury'
           } 
         } 
       });
-
-      render(path.join(dirname, 'template.hbs'), locals, function (err, html) {
-        assert.ifError(err);
-        assert.strictEqual(H.stripWs(html), H.stripWs('Hello, Freddy Mercury')); 
-        done(err);
-      });
+      const html = await H.renderTemplate(render, path.join(dirname, 'template.hbs'), locals);
+      assert.strictEqual(H.stripWs(html), H.stripWs('Hello, Freddy Mercury'));
     });
 
-    it('removes _templateOptions from the locals data', function (done) {
-      var instance = hbs.create();
-      var render = instance.express3({
+    it('removes _templateOptions from the locals data', async () => {
+      const instance = hbs.create();
+      const render = instance.express({
         restrictLayoutsTo: dirname
       });
       instance.updateTemplateOptions({
@@ -50,78 +49,15 @@ describe('local template options', function () {
           } 
       });
 
-      var locals = H.createLocals('express3', dirname, {
+      const locals = H.createLocals('express', dirname, {
         _templateOptions: {
           data: {
             lastName: 'Mercury'
           } 
         } 
       });
-
-      render(path.join(dirname, 'data-access-template.hbs'), locals, function (err, html) {
-        assert.ifError(err);
-        assert.strictEqual(H.stripWs(html), H.stripWs('')); 
-        done(err);
-      });
-    });
-  });
-
-  describe('express4', function () {
-
-    it('merges res.locals._templateOptions with the self._templateOptions', function (done) {
-      var instance = hbs.create();
-      var render = instance.express4({
-        restrictLayoutsTo: dirname
-      });
-      instance.updateTemplateOptions({
-          data: {
-            greeting: 'Hello,',
-            firstName: 'Freddy',
-            lastName: 'Krueger'
-          } 
-      });
-
-      var locals = H.createLocals('express4', dirname, {
-        _templateOptions: {
-          data: {
-            lastName: 'Mercury'
-          } 
-        } 
-      });
-
-      render(path.join(dirname, 'template.hbs'), locals, function (err, html) {
-        assert.ifError(err);
-        assert.strictEqual(H.stripWs(html), H.stripWs('Hello, Freddy Mercury')); 
-        done(err);
-      });
-    });
-
-    it('removes _templateOptions from the locals data', function (done) {
-      var instance = hbs.create();
-      var render = instance.express3({
-        restrictLayoutsTo: dirname
-      });
-      instance.updateTemplateOptions({
-          data: {
-            greeting: 'Hello,',
-            firstName: 'Freddy',
-            lastName: 'Krueger'
-          } 
-      });
-
-      var locals = H.createLocals('express3', dirname, {
-        _templateOptions: {
-          data: {
-            lastName: 'Mercury'
-          } 
-        } 
-      });
-
-      render(path.join(dirname, 'data-access-template.hbs'), locals, function (err, html) {
-        assert.ifError(err);
-        assert.strictEqual(H.stripWs(html), H.stripWs('')); 
-        done(err);
-      });
+      const html = await H.renderTemplate(render, path.join(dirname, 'data-access-template.hbs'), locals);
+      assert.strictEqual(H.stripWs(html), H.stripWs(''));
     });
   });
 });

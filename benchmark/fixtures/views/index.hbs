@@ -1,0 +1,11 @@
+{{!< default}}
+<h1>Benchmark</h1>
+<ul>
+{{#each items}}
+  {{> card}}
+{{/each}}
+</ul>
+
+{{#contentFor "scripts"}}
+<script>window.__BENCHMARK = true;</script>
+{{/contentFor}}

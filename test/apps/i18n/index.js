@@ -7,20 +7,20 @@
  *
  */
 
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import i18n from 'i18n';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function create(hbs, env) {
-  'use strict';
-
   if (env) process.env.NODE_ENV = env;
 
-  var express = require('express');
-  var cookieParser = require('cookie-parser');
-  var app = express();
-  var fs = require('fs');
-  var path = require('path');
-  var viewsDir = __dirname + '/views';
-  var i18n = require('i18n');
-  var url = require('url');
+  const app = express();
+  const viewsDir = __dirname + '/views';
 
   // minimal config
   i18n.configure({
@@ -30,7 +30,7 @@ function create(hbs, env) {
   });
 
   // Hook in express-hbs and tell it where known directories reside
-  app.engine('hbs', hbs.express3({
+  app.engine('hbs', hbs.express({
     i18n: i18n,
     restrictLayoutsTo: viewsDir
   }));
@@ -43,7 +43,7 @@ function create(hbs, env) {
   // init i18n module for this loop
   app.use(i18n.init);
 
-  app.get('/', function (req, res) {
+  app.get('/', (req, res) => {
     res.render('index', {
       array: [1, 2]
     });
@@ -52,4 +52,4 @@ function create(hbs, env) {
   return app;
 }
 
-exports.create = create;
+export { create };

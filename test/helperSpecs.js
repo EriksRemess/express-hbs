@@ -1,53 +1,51 @@
-var assert = require('assert');
-var hbs = require('..');
-var H = require('./helpers');
+import assert from 'node:assert';
+import { describe, it } from './testkit.js';
+import hbs from '../index.js';
+import { dirnameFromMeta } from './fixtures/paths.js';
+import * as H from './helpers.js';
 
-describe('helpers', function() {
+const __dirname = dirnameFromMeta(import.meta.url);
 
-  describe('sync', function() {
-    var dirname = __dirname + '/views/helpers';
+describe('helpers', () => {
 
-    function sync(s, options) {
-      return new hbs.SafeString("-sync-" + s);
+  describe('sync', () => {
+    const dirname = __dirname + '/views/helpers';
+
+    function sync(s) {
+      return new hbs.SafeString('-sync-' + s);
     }
 
-    it ('should register functions', function(done) {
-      var hb = hbs.create();
-      hb.registerHelper("sync", sync);
-      var render = hb.express3({
+    it('should register functions', async () => {
+      const hb = hbs.create();
+      hb.registerHelper('sync', sync);
+      const render = hb.express({
         viewsDir: dirname,
         restrictLayoutsTo: dirname
       });
-      var locals = H.createLocals('express3', dirname);
-
-      render(dirname + '/home/index.hbs', locals, function(err, html) {
-        assert.equal('<default>index-sync-index</default>', H.stripWs(html));
-        done();
-      });
+      const locals = H.createLocals('express', dirname);
+      const html = await H.renderTemplate(render, dirname + '/home/index.hbs', locals);
+      assert.equal('<default>index-sync-index</default>', H.stripWs(html));
     });
   });
 
-  describe('async', function() {
-    var dirname = __dirname + '/views/helpers';
-    it ('should register functions', function(done) {
-      var hb = hbs.create();
+  describe('async', () => {
+    const dirname = __dirname + '/views/helpers';
+    it('should register functions', async () => {
+      const hb = hbs.create();
       function async(s, cb) {
-        setTimeout(function() {
-          cb(new hb.SafeString("-async-" + s));
-        }, Math.floor((Math.random()*10)+1));
+        setTimeout(() => {
+          cb(new hb.SafeString('-async-' + s));
+        }, Math.floor(Math.random()*10+1));
       }
-      hb.registerAsyncHelper("async", async);
+      hb.registerAsyncHelper('async', async);
 
-      var render = hb.express3({
+      const render = hb.express({
         viewsDir: dirname,
         restrictLayoutsTo: dirname
       });
-      var locals = H.createLocals('express3', dirname);
-
-      render(dirname + '/home/async.hbs', locals, function(err, html) {
-        assert.equal('<default>asynctemplate-async-foo-async-bar-async-bah-async-baz</default>', H.stripWs(html));
-        done();
-      });
+      const locals = H.createLocals('express', dirname);
+      const html = await H.renderTemplate(render, dirname + '/home/async.hbs', locals);
+      assert.equal('<default>asynctemplate-async-foo-async-bar-async-bah-async-baz</default>', H.stripWs(html));
     });
 
 

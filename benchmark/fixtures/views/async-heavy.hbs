@@ -1,0 +1,11 @@
+{{!< default}}
+<h1>ASYNC BENCHMARK</h1>
+<ul>
+{{#each items}}
+  <li>{{delayUpper name}}|{{delayWrap (delayUpper kind)}}|{{delayPair (delayWrap (delayUpper name))}}</li>
+{{/each}}
+</ul>
+
+{{#contentFor "scripts"}}
+<script>window.__BENCHMARK_ASYNC = true;</script>
+{{/contentFor}}

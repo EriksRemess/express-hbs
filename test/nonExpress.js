@@ -1,37 +1,35 @@
-var assert = require('assert');
-var hbs = require('..');
-var H = require('./helpers');
+import assert from 'node:assert';
+import { describe, it } from './testkit.js';
+import hbs from '../index.js';
+import { dirnameFromMeta } from './fixtures/paths.js';
+import * as H from './helpers.js';
 
-describe('non-express', function() {
+const __dirname = dirnameFromMeta(import.meta.url);
 
-  describe('viewsDir', function() {
-    var dirname = __dirname + '/views/viewsDir';
+describe('non-express', () => {
 
-    it ('should use viewsDir options', function(done) {
-      var render = hbs.create().express3({
+  describe('viewsDir', () => {
+    const dirname = __dirname + '/views/viewsDir';
+
+    it('should use viewsDir options', async () => {
+      const render = hbs.create().express({
         viewsDir: dirname,
         restrictLayoutsTo: dirname
       });
-      var locals = H.createLocals('express3', dirname);
-
-      render(dirname + '/sub/directive.hbs', locals, function(err, html) {
-        assert.equal('<vd>directive</vd>', H.stripWs(html));
-        done();
-      });
+      const locals = H.createLocals('express', dirname);
+      const html = await H.renderTemplate(render, dirname + '/sub/directive.hbs', locals);
+      assert.equal('<vd>directive</vd>', H.stripWs(html));
     });
 
-    it ('should work with layoutsDir', function(done) {
-      var render = hbs.create().express3({
+    it('should work with layoutsDir', async () => {
+      const render = hbs.create().express({
         viewsDir: dirname,
         layoutsDir: dirname + '/layouts',
         restrictLayoutsTo: dirname
       });
-      var locals = H.createLocals('express3', dirname, {layout: 'default.hbs'});
-
-      render(dirname + '/sub/lay.hbs', locals, function(err, html) {
-        assert.equal('<vd>lay</vd>', H.stripWs(html));
-        done();
-      });
+      const locals = H.createLocals('express', dirname, { layout: 'default.hbs' });
+      const html = await H.renderTemplate(render, dirname + '/sub/lay.hbs', locals);
+      assert.equal('<vd>lay</vd>', H.stripWs(html));
     });
   });
 });

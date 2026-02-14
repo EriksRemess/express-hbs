@@ -1,117 +1,88 @@
-'use strict';
+import assert from 'node:assert';
+import express from 'express';
+import { beforeEach, describe, it } from './testkit.js';
+import hbs from '../index.js';
+import { request } from './http.js';
 
-var request = require('supertest');
-var assert = require('assert');
-var express = require('express');
-var hbs = require('..');
+describe('multiple directories', () => {
+  let app;
 
-describe('multiple directories', function() {
-  var app;
-
-  beforeEach(function() {
+  beforeEach(() => {
     app = express();
-    app.engine('hbs', hbs.express3({
+    app.engine('hbs', hbs.express({
       restrictLayoutsTo: './test/views/multiple'
     }));
     app.set('view engine', 'hbs');
-    app.get('/test1', function (req, res) {
+    app.get('/test1', (req, res) => {
       res.render('test1');
     });
-    app.get('/test2', function (req, res) {
+    app.get('/test2', (req, res) => {
       res.render('test2');
     });
-    app.get('/collide', function (req, res) {
+    app.get('/collide', (req, res) => {
       res.render('collide');
     });
-    app.get('/error', function (req, res) {
+    app.get('/error', (req, res) => {
       res.render('error');
     });
   });
 
-  it('should handle single folder', function(done) {
+  it('should handle single folder', async () => {
     app.set('views', './test/views/multiple/views1');
-    request(app)
-      .get('/test1')
-      .end(function (err, res) {
-        assert.ifError(err);
-        var expected = '<h1>test1</h1>\n';
-        assert.equal(res.text, expected);
-        done();
-      });
+    const res = await request(app, '/test1');
+    const expected = '<h1>test1</h1>\n';
+    assert.equal(res.text, expected);
   });
 
-  it('should handle multiple folders', function(done) {
+  it('should handle multiple folders', async () => {
     app.set('views', ['./test/views/multiple/views1', './test/views/multiple/views2']);
-    request(app)
-      .get('/test2')
-      .end(function (err, res) {
-        assert.ifError(err);
-        var expected = '<h1>test2</h1>\n';
-        assert.equal(res.text, expected);
-        done();
-      });
+    const res = await request(app, '/test2');
+    const expected = '<h1>test2</h1>\n';
+    assert.equal(res.text, expected);
   });
 
-  describe('should handle multiple folders in specific order', function() {
+  describe('should handle multiple folders in specific order', () => {
 
-    it('views1, views2', function(done) {
+    it('views1, views2', async () => {
       app.set('views', ['./test/views/multiple/views1', './test/views/multiple/views2']);
-      request(app)
-        .get('/collide')
-        .end(function (err, res) {
-          assert.ifError(err);
-          var expected = '<h1>collide1</h1>\n';
-          assert.equal(res.text, expected);
-          done();
-        });
+      const res = await request(app, '/collide');
+      const expected = '<h1>collide1</h1>\n';
+      assert.equal(res.text, expected);
     });
 
-    it('views2, views1', function(done) {
+    it('views2, views1', async () => {
       app.set('views', ['./test/views/multiple/views2', './test/views/multiple/views1']);
-      request(app)
-        .get('/collide')
-        .end(function (err, res) {
-          assert.ifError(err);
-          var expected = '<h1>collide2</h1>\n';
-          assert.equal(res.text, expected);
-          done();
-        });
+      const res = await request(app, '/collide');
+      const expected = '<h1>collide2</h1>\n';
+      assert.equal(res.text, expected);
     });
 
   });
 
   /* eslint-disable no-unused-vars */
-  describe('should report the filename in error', function() {
+  describe('should report the filename in error', () => {
 
-    it('should report from first folder', function(done) {
+    it('should report from first folder', async () => {
       app.set('views', ['./test/views/multiple/views1', './test/views/multiple/views2']);
-      app.use(function(err, req, res, next) {
+      app.use((err, req, res, next) => {
         res.status(500).send(err.stack);
       });
 
-      request(app)
-      .get('/error')
-      .end(function(err, res) {
-        assert.ifError(err);
-        assert(res.error.text.indexOf('views1/error.hbs]') > 0);
-        done();
-      });
+      const res = await request(app, '/error');
+      assert.equal(res.statusCode, 500);
+      assert(res.text.indexOf('views1/error.hbs]') > 0);
     });
 
 
-    it('should report from second folder', function(done) {
+    it('should report from second folder', async () => {
       app.set('views', ['./test/views/multiple/views2', './test/views/multiple/views1']);
-      app.use(function(err, req, res, next) {
+      app.use((err, req, res, next) => {
         res.status(500).send(err.stack);
       });
 
-      request(app)
-      .get('/error')
-      .end(function(err, res) {
-        assert.ifError(err);
-        assert(res.error.text.indexOf('views2/error.hbs]') > 0);
-        done();
-      });
+      const res = await request(app, '/error');
+      assert.equal(res.statusCode, 500);
+      assert(res.text.indexOf('views2/error.hbs]') > 0);
     });
   });
   /* eslint-enable no-unused-vars */
