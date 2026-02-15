@@ -329,27 +329,5 @@ describe('lib helpers', () => {
       assert.equal(hb._replaceValue(12, []), 12);
       assert.equal(hb._replaceValue('text', []), 'text');
     });
-
-    it('loadBeautify ignores missing rc and throws on other fs errors', async () => {
-      const hb = hbs.create();
-      await hb._loadBeautify();
-
-      const originalReadFile = fs.readFile;
-      fs.readFile = async (filePath, encoding) => {
-        if (filePath.endsWith('.jsbeautifyrc')) {
-          const error = new Error('denied');
-          error.code = 'EACCES';
-          throw error;
-        }
-        return originalReadFile(filePath, encoding);
-      };
-
-      try {
-        hb.beautify = null;
-        await assert.rejects(hb._loadBeautify(), /denied/);
-      } finally {
-        fs.readFile = originalReadFile;
-      }
-    });
   });
 });

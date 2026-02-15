@@ -58,7 +58,6 @@ hbs.express({
   i18n: "{Object} i18n object",
   layoutsDir: "{String} Path to layout templates",
   templateOptions: "{Object} options to pass to template()",
-  beautify: "{Boolean} whether to pretty print HTML, see github.com/einars/js-beautify .jsbeautifyrc",
 
   // override the default compile
   onCompile: function(exhbs, source, filename) {
@@ -284,6 +283,16 @@ To run example project
 
     npm install
     node example/app.js
+
+## TypeScript declarations
+
+Generate declaration files (`.d.ts`) from JSDoc annotations:
+
+  npm run types:build
+
+Rebuild declarations from scratch:
+
+  npm run types:rebuild
 
 
 ## Testing

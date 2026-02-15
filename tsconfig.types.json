@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "outDir": "types",
+    "types": [
+      "node"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "strict": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "index.js",
+    "lib/**/*.js"
+  ],
+  "exclude": [
+    "test/**",
+    "example/**",
+    "benchmark/**"
+  ]
+}

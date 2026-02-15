@@ -10,10 +10,12 @@
     "partials"
   ],
   "main": "index.js",
+  "types": "types/index.d.ts",
   "type": "module",
   "files": [
     "index.js",
     "lib/",
+    "types/",
     "README.md",
     "LICENSE"
   ],
@@ -27,6 +29,9 @@
     "lint": "eslint --ext .js --cache lib/**/*.js test/**/*.js example/**/*.js",
     "test": "node --test test/*.js",
     "posttest": "npm run lint",
+    "types:clean": "rm -rf types",
+    "types:build": "tsc -p tsconfig.types.json",
+    "types:rebuild": "npm run types:clean && npm run types:build",
     "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' --test-coverage-include='example/**/*.js' test/*.js",
     "bench": "node benchmark/compare-with-original.js",
     "bench:compare-original": "node benchmark/compare-with-original.js",
@@ -47,17 +52,16 @@
     "node": "24.x"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "cookie-parser": "1.4.7",
     "eslint": "^10.0.0",
     "express": "^5.2.1",
     "globals": "^17.3.0",
     "i18n": "0.15.3",
+    "typescript": "^5.9.2",
     "tryghost-express-hbs": "npm:express-hbs@^2.5.0"
   },
   "dependencies": {
     "handlebars": "^4.7.8"
-  },
-  "optionalDependencies": {
-    "js-beautify": "^1.15.4"
   }
 }
