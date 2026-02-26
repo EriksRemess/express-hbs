@@ -1,0 +1,12 @@
+{
+  "name": "@eriks/express-hbs-benchmark",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compare": "node compare-with-original.js",
+    "compare:async": "BENCH_SCENARIO=async node compare-with-original.js"
+  },
+  "dependencies": {
+    "tryghost-express-hbs": "npm:express-hbs@^2.5.0"
+  }
+}

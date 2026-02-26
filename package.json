@@ -33,9 +33,9 @@
     "types:build": "tsc -p tsconfig.types.json",
     "types:rebuild": "npm run types:clean && npm run types:build",
     "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' --test-coverage-include='example/**/*.js' test/*.js",
-    "bench": "node benchmark/compare-with-original.js",
-    "bench:compare-original": "node benchmark/compare-with-original.js",
-    "bench:compare-original:async": "BENCH_SCENARIO=async node benchmark/compare-with-original.js"
+    "bench": "npm --prefix benchmark run compare",
+    "bench:compare-original": "npm --prefix benchmark run compare",
+    "bench:compare-original:async": "npm --prefix benchmark run compare:async"
   },
   "repository": {
     "type": "git",
@@ -52,14 +52,13 @@
     "node": "24.x"
   },
   "devDependencies": {
-    "@types/node": "^25.2.3",
+    "@types/node": "^25.3.2",
     "cookie-parser": "1.4.7",
-    "eslint": "^10.0.0",
+    "eslint": "^10.0.2",
     "express": "^5.2.1",
     "globals": "^17.3.0",
     "i18n": "0.15.3",
-    "typescript": "^5.9.3",
-    "tryghost-express-hbs": "npm:express-hbs@^2.5.0"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "handlebars": "^4.7.8"

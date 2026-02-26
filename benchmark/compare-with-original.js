@@ -11,7 +11,7 @@ let originalHbs;
 try {
   originalHbs = require('tryghost-express-hbs');
 } catch (error) {
-  console.error('Missing dependency "tryghost-express-hbs". Run: npm install');
+  console.error('Missing benchmark dependency "tryghost-express-hbs". Run: npm install --prefix benchmark');
   throw error;
 }
 
