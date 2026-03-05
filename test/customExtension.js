@@ -1,9 +1,9 @@
+import hbs from '#hbs';
+import { dirnameFromMeta } from '#test/fixtures/paths';
+import { renderTemplate, stripWs } from '#test/helpers';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
 import path from 'node:path';
-import { describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { dirnameFromMeta } from './fixtures/paths.js';
-import * as H from './helpers.js';
 
 const __dirname = dirnameFromMeta(import.meta.url);
 
@@ -20,7 +20,7 @@ describe('custom extension for partials view', () => {
 
   it('should allow rendering multiple partials with custom extension', async () => {
     const options = { cache: true, settings: { views: dirname } };
-    const html = await H.renderTemplate(render, dirname + '/template.server.view.html', options);
+    const html = await renderTemplate(render, dirname + '/template.server.view.html', options);
     assert.equal(
       '<html>' +
         '<subpartial>1</subpartial>' +
@@ -28,7 +28,7 @@ describe('custom extension for partials view', () => {
         '<subpartial>2</subpartial>' +
         '<partial>2</partial>' +
       '</html>',
-      H.stripWs(html)
+      stripWs(html)
     );
   });
 

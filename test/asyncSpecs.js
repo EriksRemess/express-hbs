@@ -1,9 +1,9 @@
+import hbs from '#hbs';
+import { hasResolvers } from '#lib/resolver';
+import { create as createAsyncApp } from '#test/apps/async/index';
+import { request } from '#test/http';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import { describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { create as createAsyncApp } from './apps/async/index.js';
-import { request } from './http.js';
-import * as resolver from '../lib/resolver.js';
 
 async function makeUserRequest(app, user) {
   const res = await request(app, '/', {
@@ -49,7 +49,7 @@ describe('async', () => {
   it('should render nested async helpers', async () => {
     const app = createAsyncApp(hbs.create(), 'production');
     const results = await makeUserRequest(app, 'jt');
-    assert.equal(false, resolver.hasResolvers(results));
+    assert.equal(false, hasResolvers(results));
     assert.equal(-1, results.search('This should not show!'));
   });
 });

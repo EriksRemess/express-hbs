@@ -1,8 +1,8 @@
+import { create as createExampleApp } from '#example/app';
+import hbs from '#hbs';
+import { request } from '#test/http';
+import { beforeEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import { beforeEach, describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { create as createExampleApp } from '../example/app.js';
-import { request } from './http.js';
 
 describe('express-hbs', () => {
 

@@ -1,6 +1,6 @@
-const stripWs = (s) => s.replace( /\s+/g, '' );
+export const stripWs = (s) => s.replace( /\s+/g, '' );
 
-function createLocals(which, viewsDir, locals) {
+export function createLocals(which, viewsDir, locals) {
   if (!locals) locals = {};
   const opts = {};
   if (which === 'express') {
@@ -16,7 +16,7 @@ function createLocals(which, viewsDir, locals) {
   return opts;
 }
 
-function renderTemplate(render, filename, options) {
+export function renderTemplate(render, filename, options) {
   return new Promise((resolve, reject) => {
     render(filename, options, (err, html) => {
       if (err) {
@@ -28,17 +28,10 @@ function renderTemplate(render, filename, options) {
   });
 }
 
-function renderTemplateResult(render, filename, options) {
+export function renderTemplateResult(render, filename, options) {
   return new Promise((resolve) => {
     render(filename, options, (err, html) => {
       resolve({ err: err, html: html });
     });
   });
 }
-
-export {
-  createLocals,
-  stripWs,
-  renderTemplate,
-  renderTemplateResult
-};

@@ -1,11 +1,11 @@
+import layoutsDirApp from '#example/app-layoutsDir';
+import hbs from '#hbs';
+import { dirnameFromMeta } from '#test/fixtures/paths';
+import { renderTemplate, renderTemplateResult } from '#test/helpers';
+import { request } from '#test/http';
+import { beforeEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
 import path from 'node:path';
-import { beforeEach, describe, it } from './testkit.js';
-import hbs from '../index.js';
-import layoutsDirApp from '../example/app-layoutsDir.js';
-import { dirnameFromMeta } from './fixtures/paths.js';
-import * as H from './helpers.js';
-import { request } from './http.js';
 
 const __dirname = dirnameFromMeta(import.meta.url);
 
@@ -79,7 +79,7 @@ describe('layouts', () => {
         title: 'My favorite fruits',
         fruits: [{ name: 'apple' }]
       });
-      const html = await H.renderTemplate(render, path.join(exampleViews, 'fruits/index-layoutsDir.hbs'), locals);
+      const html = await renderTemplate(render, path.join(exampleViews, 'fruits/index-layoutsDir.hbs'), locals);
       assert.match(html, /DECLARATIVE LAYOUT/);
     });
   });
@@ -93,7 +93,7 @@ describe('layouts', () => {
         restrictLayoutsTo: dirname
       });
       const locals = createLocals('express', dirname);
-      const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+      const html = await renderTemplate(render, dirname + '/index.hbs', locals);
       assert.equal('<dld>dld</dld>', stripWs(html));
     });
 
@@ -102,7 +102,7 @@ describe('layouts', () => {
         restrictLayoutsTo: dirname
       });
       const locals = createLocals('express', dirname, { layout: 'layouts/default' });
-      const html = await H.renderTemplate(render, dirname + '/aside.hbs', locals);
+      const html = await renderTemplate(render, dirname + '/aside.hbs', locals);
       assert.equal('<dld>aside</dld>', stripWs(html));
     });
 
@@ -111,7 +111,7 @@ describe('layouts', () => {
         restrictLayoutsTo: path.resolve(path.join(__dirname, '../'))
       });
       const locals = createLocals('express', dirname, { layout: '/Users/egg/Code/Ghost/ghost/core/package.json' });
-      const result = await H.renderTemplateResult(render, dirname + '/aside.hbs', locals);
+      const result = await renderTemplateResult(render, dirname + '/aside.hbs', locals);
       if (!result.err) {
         throw new Error('We expect an error when reading');
       }
@@ -122,7 +122,7 @@ describe('layouts', () => {
         restrictLayoutsTo: dirname
       });
       const locals = createLocals('express', dirname, { layout: false });
-      const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+      const html = await renderTemplate(render, dirname + '/index.hbs', locals);
       assert.equal('dld', stripWs(html));
     });
   });

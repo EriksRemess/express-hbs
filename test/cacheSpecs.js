@@ -1,11 +1,11 @@
+import { create as createExampleApp } from '#example/app';
+import hbs from '#hbs';
+import { dirnameFromMeta } from '#test/fixtures/paths';
+import { request } from '#test/http';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import path from 'node:path';
-import { describe, it } from './testkit.js';
 import fs from 'node:fs/promises';
-import hbs from '../index.js';
-import { create as createExampleApp } from '../example/app.js';
-import { dirnameFromMeta } from './fixtures/paths.js';
-import { request } from './http.js';
+import path from 'node:path';
 
 const __dirname = dirnameFromMeta(import.meta.url);
 

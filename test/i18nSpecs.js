@@ -1,8 +1,8 @@
+import hbs from '#hbs';
+import { create as createI18nApp } from '#test/apps/i18n/index';
+import { request } from '#test/http';
+import { beforeEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import { beforeEach, describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { create as createI18nApp } from './apps/i18n/index.js';
-import { request } from './http.js';
 
 describe('i18n', () => {
   let app;

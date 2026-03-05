@@ -1,10 +1,15 @@
+import hbs from '#hbs';
+import { fromHere } from '#test/fixtures/paths';
+import {
+  createLocals as createExpressLocals,
+  renderTemplate,
+  renderTemplateResult,
+  stripWs
+} from '#test/helpers';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import { describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { fromHere } from './fixtures/paths.js';
-import * as H from './helpers.js';
 
-const createLocals = (dirname, locals) => H.createLocals('express', dirname, locals);
+const createLocals = (dirname, locals) => createExpressLocals('express', dirname, locals);
 
 describe('issue-22 template', () => {
   const dirname = fromHere(import.meta.url, 'issues/22');
@@ -16,11 +21,11 @@ describe('issue-22 template', () => {
     const locals1 = createLocals(dirname, { layout: 'layout1', cache: true });
     const locals2 = createLocals(dirname, { layout: 'layout2', cache: true });
 
-    const html1 = await H.renderTemplate(render, dirname + '/template.hbs', locals1);
-    const html2 = await H.renderTemplate(render, dirname + '/template.hbs', locals2);
+    const html1 = await renderTemplate(render, dirname + '/template.hbs', locals1);
+    const html2 = await renderTemplate(render, dirname + '/template.hbs', locals2);
 
-    assert.equal('<layout1>template</layout1>', H.stripWs(html1));
-    assert.equal('<layout2>template</layout2>', H.stripWs(html2));
+    assert.equal('<layout1>template</layout1>', stripWs(html1));
+    assert.equal('<layout2>template</layout2>', stripWs(html2));
   });
 });
 
@@ -33,8 +38,8 @@ describe('issue-23', () => {
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', renderOptions);
-    assert.equal('<html>Hello</html>', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/index.hbs', renderOptions);
+    assert.equal('<html>Hello</html>', stripWs(html));
   });
 
   it('should handle empty string', async () => {
@@ -42,8 +47,8 @@ describe('issue-23', () => {
       partialsDir: [dirname + '/partials'],
       restrictLayoutsTo: dirname
     });
-    const html = await H.renderTemplate(render, dirname + '/empty.hbs', renderOptions);
-    assert.equal('', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/empty.hbs', renderOptions);
+    assert.equal('', stripWs(html));
   });
 
   it('should register empty partial', async () => {
@@ -55,8 +60,8 @@ describe('issue-23', () => {
     hb.handlebars.registerPartial('emptyPartial', '');
 
     for (let i = 0; i < 3; i += 1) {
-      const html = await H.renderTemplate(render, dirname + '/emptyPartial.hbs', renderOptions);
-      assert.equal('foo', H.stripWs(html));
+      const html = await renderTemplate(render, dirname + '/emptyPartial.hbs', renderOptions);
+      assert.equal('foo', stripWs(html));
     }
   });
 
@@ -69,8 +74,8 @@ describe('issue-23', () => {
     hb.registerPartial('emptyComment', '{{! just a comment}}');
 
     for (let i = 0; i < 3; i += 1) {
-      const html = await H.renderTemplate(render, dirname + '/emptyComment.hbs', renderOptions);
-      assert.equal('foo', H.stripWs(html));
+      const html = await renderTemplate(render, dirname + '/emptyComment.hbs', renderOptions);
+      assert.equal('foo', stripWs(html));
     }
   });
 });
@@ -84,26 +89,26 @@ describe('issue-21', () => {
 
   it('should allow specifying layouts without the parent dir', async () => {
     const options = { cache: true, layout: 'default', settings: { views: dirname + '/views' } };
-    const html = await H.renderTemplate(render, dirname + '/views/index.hbs', options);
-    assert.equal('<html>index</html>', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/views/index.hbs', options);
+    assert.equal('<html>index</html>', stripWs(html));
   });
 
   it('should allow specifying layouts without the parent dir in a sub view', async () => {
     const options = { cache: true, layout: 'default', settings: { views: dirname + '/views' } };
-    const html = await H.renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
-    assert.equal('<html>sub</html>', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
+    assert.equal('<html>sub</html>', stripWs(html));
   });
 
   it('should treat layouts that start with "." relative to template', async () => {
     const options = { cache: true, layout: './relativeLayout', settings: { views: dirname + '/views' } };
-    const html = await H.renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
-    assert.equal('<relative>sub</relative>', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/views/sub/sub.hbs', options);
+    assert.equal('<relative>sub</relative>', stripWs(html));
   });
 
   it('should allow layouts in subfolders', async () => {
     const options = { cache: true, layout: 'sub/child', settings: { views: dirname + '/views' } };
-    const html = await H.renderTemplate(render, dirname + '/views/useLayoutInDir.hbs', options);
-    assert.equal('<sub>useLayoutInDir</sub>', H.stripWs(html));
+    const html = await renderTemplate(render, dirname + '/views/useLayoutInDir.hbs', options);
+    assert.equal('<sub>useLayoutInDir</sub>', stripWs(html));
   });
 
   it('should treat layouts relative to views directory if layoutsDir is not passed', async () => {
@@ -111,8 +116,8 @@ describe('issue-21', () => {
       restrictLayoutsTo: dirname
     });
     const options = { cache: true, layout: 'layouts/sub/child', settings: { views: dirname + '/views' } };
-    const html = await H.renderTemplate(localRender, dirname + '/views/sub/sub.hbs', options);
-    assert.equal('<sub>sub</sub>', H.stripWs(html));
+    const html = await renderTemplate(localRender, dirname + '/views/sub/sub.hbs', options);
+    assert.equal('<sub>sub</sub>', stripWs(html));
   });
 });
 
@@ -125,7 +130,7 @@ describe('issue-49', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const result = await H.renderTemplateResult(render, dirname + '/error.hbs', locals);
+    const result = await renderTemplateResult(render, dirname + '/error.hbs', locals);
     assert(result.err.stack.includes('[error.hbs]'));
   });
 
@@ -135,7 +140,7 @@ describe('issue-49', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const result = await H.renderTemplateResult(render, dirname + '/front/error.hbs', locals);
+    const result = await renderTemplateResult(render, dirname + '/front/error.hbs', locals);
     assert(result.err.stack.includes('[front/error.hbs]'));
   });
 
@@ -146,7 +151,7 @@ describe('issue-49', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const result = await H.renderTemplateResult(render, dirname + '/partial.hbs', locals);
+    const result = await renderTemplateResult(render, dirname + '/partial.hbs', locals);
     assert(result.err.stack.includes('[partial.hbs]'));
   });
 
@@ -157,7 +162,7 @@ describe('issue-49', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const result = await H.renderTemplateResult(render, dirname + '/index.hbs', locals);
+    const result = await renderTemplateResult(render, dirname + '/index.hbs', locals);
     assert(result.err.stack.includes('[layouts/default.hbs]'));
   });
 });
@@ -177,7 +182,7 @@ describe('issue-53', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
     assert.ok(!html.includes('__aSyNcId_'));
   });
 });
@@ -196,8 +201,8 @@ describe('issue-59', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname);
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
-    assert.equal(H.stripWs(html), '&lt;strong&gt;foo&lt;/strong&gt;<strong>foo</strong>');
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal(stripWs(html), '&lt;strong&gt;foo&lt;/strong&gt;<strong>foo</strong>');
   });
 
   it('should not escape SafeString', async () => {
@@ -211,8 +216,8 @@ describe('issue-59', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname);
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
-    assert.equal(H.stripWs(html), '<em>foo</em><em>foo</em>');
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
+    assert.equal(stripWs(html), '<em>foo</em><em>foo</em>');
   });
 });
 
@@ -235,7 +240,7 @@ describe('issue-73', () => {
     });
 
     const locals = createLocals(dirname);
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
     assert.ok(html.match(/^Hello/m));
     assert.ok(html.match(/^second line/m));
   });
@@ -259,10 +264,10 @@ describe('issue-62', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname);
-    const html = await H.renderTemplate(render, dirname + '/basic.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/basic.hbs', locals);
 
     assert.equal(
-      H.stripWs(html),
+      stripWs(html),
       '&lt;strong&gt;foo&lt;/strong&gt;&lt;em&gt;foo&lt;/em&gt;'
     );
   });
@@ -285,10 +290,10 @@ describe('issue-62', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname);
-    const html = await H.renderTemplate(render, dirname + '/block.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/block.hbs', locals);
 
     assert.equal(
-      H.stripWs(html),
+      stripWs(html),
       '<p>GoodbyeWorld</p><p>HelloHandlebars</p>'
     );
   });
@@ -327,12 +332,12 @@ describe('issue-84', () => {
       restrictLayoutsTo: dirname
     });
 
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', {
+    const html = await renderTemplate(render, dirname + '/index.hbs', {
       cache: true,
       settings: { views: dirname + '/views' }
     });
 
-    assert.equal('<div>Testing3levelsdown</div>', H.stripWs(html));
+    assert.equal('<div>Testing3levelsdown</div>', stripWs(html));
   });
 });
 
@@ -351,7 +356,7 @@ describe('issue-144', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
     assert.equal('<div><p><code>\'$example$\'</code> abcd</p></div>\n', html);
   });
 });
@@ -365,7 +370,7 @@ describe('issue-153', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
     assert.equal('1\n2', html.trim());
   });
 });
@@ -385,8 +390,8 @@ describe('issue-270', () => {
       layout: viewsDir + '/layouts/default.hbs'
     });
 
-    const html = await H.renderTemplate(render, indexFile, locals);
-    assert.equal(H.stripWs(html), '<layout>Hello</layout>');
+    const html = await renderTemplate(render, indexFile, locals);
+    assert.equal(stripWs(html), '<layout>Hello</layout>');
   });
 
   it('should reject absolute layout paths outside restrictLayoutsTo', async () => {
@@ -399,7 +404,7 @@ describe('issue-270', () => {
       layout: dirname + '/outside/default.hbs'
     });
 
-    const result = await H.renderTemplateResult(render, indexFile, locals);
+    const result = await renderTemplateResult(render, indexFile, locals);
     assert(result.err);
     assert(result.err.message.includes('does not reside in'));
   });
@@ -423,10 +428,10 @@ describe('issue-160', () => {
       restrictLayoutsTo: dirname
     });
     const locals = createLocals(dirname, {});
-    const html = await H.renderTemplate(render, dirname + '/index.hbs', locals);
+    const html = await renderTemplate(render, dirname + '/index.hbs', locals);
 
     assert.equal(
-      H.stripWs(html),
+      stripWs(html),
       'first:second:valone:two:none<b>left:right:z:block</b>'
     );
   });
@@ -446,21 +451,21 @@ describe('issue-161', () => {
     const render = createRender();
     const locals = createLocals(dirname, { cache: true });
 
-    const html1 = await H.renderTemplate(render, templateFile, locals);
-    const html2 = await H.renderTemplate(render, indexFile, locals);
+    const html1 = await renderTemplate(render, templateFile, locals);
+    const html2 = await renderTemplate(render, indexFile, locals);
 
-    assert.equal(H.stripWs(html1), '<default></default>');
-    assert.equal(H.stripWs(html2), '<default><index>ok</index></default>');
+    assert.equal(stripWs(html1), '<default></default>');
+    assert.equal(stripWs(html2), '<default><index>ok</index></default>');
   });
 
   it('should render same file as layout then as template with cache enabled', async () => {
     const render = createRender();
     const locals = createLocals(dirname, { cache: true });
 
-    const html1 = await H.renderTemplate(render, indexFile, locals);
-    const html2 = await H.renderTemplate(render, templateFile, locals);
+    const html1 = await renderTemplate(render, indexFile, locals);
+    const html2 = await renderTemplate(render, templateFile, locals);
 
-    assert.equal(H.stripWs(html1), '<default><index>ok</index></default>');
-    assert.equal(H.stripWs(html2), '<default></default>');
+    assert.equal(stripWs(html1), '<default><index>ok</index></default>');
+    assert.equal(stripWs(html2), '<default></default>');
   });
 });

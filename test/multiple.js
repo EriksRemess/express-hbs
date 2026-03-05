@@ -1,8 +1,8 @@
-import assert from 'node:assert';
+import hbs from '#hbs';
+import { request } from '#test/http';
+import { beforeEach, describe, it } from '#test/testkit';
 import express from 'express';
-import { beforeEach, describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { request } from './http.js';
+import assert from 'node:assert';
 
 describe('multiple directories', () => {
   let app;

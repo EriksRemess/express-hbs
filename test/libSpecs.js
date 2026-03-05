@@ -1,16 +1,16 @@
+import hbs from '#hbs';
+import generateId from '#lib/generate-id';
+import { done, hasResolvers, resolve } from '#lib/resolver';
+import { fromHere } from '#test/fixtures/paths';
+import { describe, it } from '#test/testkit';
+import handlebars from 'handlebars';
 import assert from 'node:assert';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, it } from './testkit.js';
-import fs from 'node:fs/promises';
-import handlebars from 'handlebars';
-import generateId from '../lib/generate-id.js';
-import * as resolver from '../lib/resolver.js';
-import hbs from '../index.js';
-import { fromHere } from './fixtures/paths.js';
 
 const resolveCache = (cache) => new Promise((resolve, reject) => {
-  resolver.done(cache, (err, values) => {
+  done(cache, (err, values) => {
     if (err) {
       reject(err);
       return;
@@ -38,12 +38,12 @@ describe('lib helpers', () => {
 
   describe('resolver', () => {
     it('should detect resolver token at string start', () => {
-      assert.equal(resolver.hasResolvers('__aSyNcId__x'), true);
+      assert.equal(hasResolvers('__aSyNcId__x'), true);
     });
 
     it('should support map-based resolver cache', async () => {
       const cache = new Map();
-      const id = resolver.resolve(cache, (_, cb) => {
+      const id = resolve(cache, (_, cb) => {
         cb('resolved');
       });
 
@@ -54,10 +54,10 @@ describe('lib helpers', () => {
 
     it('should reject when resolver callback throws', async () => {
       const cache = Object.create(null);
-      resolver.resolve(cache, () => {
+      resolve(cache, () => {
         throw new Error('boom');
       });
-      await assert.rejects(resolver.done(cache), /boom/);
+      await assert.rejects(done(cache), /boom/);
     });
   });
 

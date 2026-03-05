@@ -1,1 +1,1 @@
-export {default} from './lib/hbs.js';
+export { default } from '#lib/hbs';

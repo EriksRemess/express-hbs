@@ -1,9 +1,9 @@
+import hbs from '#hbs';
+import { dirnameFromMeta } from '#test/fixtures/paths';
+import { createLocals, renderTemplate, stripWs } from '#test/helpers';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
 import path from 'node:path';
-import { describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { dirnameFromMeta } from './fixtures/paths.js';
-import * as H from './helpers.js';
 
 const __dirname = dirnameFromMeta(import.meta.url);
 
@@ -25,15 +25,15 @@ describe('local template options', () => {
           } 
       });
 
-      const locals = H.createLocals('express', dirname, {
+      const locals = createLocals('express', dirname, {
         _templateOptions: {
           data: {
             lastName: 'Mercury'
           } 
         } 
       });
-      const html = await H.renderTemplate(render, path.join(dirname, 'template.hbs'), locals);
-      assert.strictEqual(H.stripWs(html), H.stripWs('Hello, Freddy Mercury'));
+      const html = await renderTemplate(render, path.join(dirname, 'template.hbs'), locals);
+      assert.strictEqual(stripWs(html), stripWs('Hello, Freddy Mercury'));
     });
 
     it('removes _templateOptions from the locals data', async () => {
@@ -49,15 +49,15 @@ describe('local template options', () => {
           } 
       });
 
-      const locals = H.createLocals('express', dirname, {
+      const locals = createLocals('express', dirname, {
         _templateOptions: {
           data: {
             lastName: 'Mercury'
           } 
         } 
       });
-      const html = await H.renderTemplate(render, path.join(dirname, 'data-access-template.hbs'), locals);
-      assert.strictEqual(H.stripWs(html), H.stripWs(''));
+      const html = await renderTemplate(render, path.join(dirname, 'data-access-template.hbs'), locals);
+      assert.strictEqual(stripWs(html), stripWs(''));
     });
   });
 });

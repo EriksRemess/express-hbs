@@ -12,6 +12,12 @@
   "main": "index.js",
   "types": "types/index.d.ts",
   "type": "module",
+  "imports": {
+    "#hbs": "./index.js",
+    "#lib/*": "./lib/*.js",
+    "#example/*": "./example/*.js",
+    "#test/*": "./test/*.js"
+  },
   "files": [
     "index.js",
     "lib/",

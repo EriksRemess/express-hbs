@@ -1,8 +1,8 @@
+import hbs from '#hbs';
+import { dirnameFromMeta } from '#test/fixtures/paths';
+import { createLocals, renderTemplate, stripWs } from '#test/helpers';
+import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
-import { describe, it } from './testkit.js';
-import hbs from '../index.js';
-import { dirnameFromMeta } from './fixtures/paths.js';
-import * as H from './helpers.js';
 
 const __dirname = dirnameFromMeta(import.meta.url);
 
@@ -22,9 +22,9 @@ describe('helpers', () => {
         viewsDir: dirname,
         restrictLayoutsTo: dirname
       });
-      const locals = H.createLocals('express', dirname);
-      const html = await H.renderTemplate(render, dirname + '/home/index.hbs', locals);
-      assert.equal('<default>index-sync-index</default>', H.stripWs(html));
+      const locals = createLocals('express', dirname);
+      const html = await renderTemplate(render, dirname + '/home/index.hbs', locals);
+      assert.equal('<default>index-sync-index</default>', stripWs(html));
     });
   });
 
@@ -43,9 +43,9 @@ describe('helpers', () => {
         viewsDir: dirname,
         restrictLayoutsTo: dirname
       });
-      const locals = H.createLocals('express', dirname);
-      const html = await H.renderTemplate(render, dirname + '/home/async.hbs', locals);
-      assert.equal('<default>asynctemplate-async-foo-async-bar-async-bah-async-baz</default>', H.stripWs(html));
+      const locals = createLocals('express', dirname);
+      const html = await renderTemplate(render, dirname + '/home/async.hbs', locals);
+      assert.equal('<default>asynctemplate-async-foo-async-bar-async-bah-async-baz</default>', stripWs(html));
     });
 
 
