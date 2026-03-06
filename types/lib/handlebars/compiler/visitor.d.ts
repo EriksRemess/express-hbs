@@ -1,0 +1,31 @@
+export default class Visitor {
+    parents: any[];
+    mutating: boolean;
+    acceptKey(node: any, name: any): void;
+    acceptRequired(node: any, name: any): void;
+    acceptArray(array: any): void;
+    accept(object: any): any;
+    current: any;
+    Program(program: any): void;
+    MustacheStatement: typeof visitSubExpression;
+    Decorator: typeof visitSubExpression;
+    BlockStatement: typeof visitBlock;
+    DecoratorBlock: typeof visitBlock;
+    PartialStatement: typeof visitPartial;
+    SubExpression: typeof visitSubExpression;
+    PartialBlockStatement(partial: any): void;
+    ContentStatement(): void;
+    CommentStatement(): void;
+    PathExpression(): void;
+    StringLiteral(): void;
+    NumberLiteral(): void;
+    BooleanLiteral(): void;
+    UndefinedLiteral(): void;
+    NullLiteral(): void;
+    Hash(hash: any): void;
+    HashPair(pair: any): void;
+}
+declare function visitSubExpression(mustache: any): void;
+declare function visitBlock(block: any): void;
+declare function visitPartial(partial: any): void;
+export {};

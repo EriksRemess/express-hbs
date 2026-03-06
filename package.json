@@ -15,8 +15,7 @@
   "imports": {
     "#hbs": "./index.js",
     "#handlebars": "./lib/handlebars/handlebars.js",
-    "#handlebars/*": "./lib/handlebars/handlebars/*.js",
-    "#handlebars/runtime-entry": "./lib/handlebars/handlebars.runtime.js",
+    "#handlebars/*": "./lib/handlebars/*.js",
     "#lib/*": "./lib/*.js",
     "#example/*": "./example/*.js",
     "#test/*": "./test/*.js"

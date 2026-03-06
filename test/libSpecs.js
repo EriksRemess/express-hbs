@@ -1,9 +1,8 @@
 import hbs from '#hbs';
-import generateId from '#lib/generate-id';
 import { done, hasResolvers, resolve } from '#lib/resolver';
 import { fromHere } from '#test/fixtures/paths';
 import { describe, it } from '#test/testkit';
-import handlebars from '#lib/handlebars';
+import handlebars from '#handlebars';
 import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -20,20 +19,6 @@ const resolveCache = (cache) => new Promise((resolve, reject) => done(cache, (er
 describe('lib helpers', () => {
   const issuesDir = fromHere(import.meta.url, 'issues');
 
-  describe('generate-id', () => {
-    it('should create IDs with default length', () => {
-      const id = generateId();
-      assert.equal(id.length, 8);
-      assert.match(id, /^[A-Za-z_]+$/);
-    });
-
-    it('should create IDs with requested length', () => {
-      const id = generateId(32);
-      assert.equal(id.length, 32);
-      assert.match(id, /^[A-Za-z_]+$/);
-    });
-  });
-
   describe('resolver', () => {
     it('should detect resolver token at string start', () => {
       assert.equal(hasResolvers('__aSyNcId__x'), true);
@@ -46,6 +31,7 @@ describe('lib helpers', () => {
       });
 
       assert.equal(cache.has(id), true);
+      assert.match(id, /^__aSyNcId__<_[A-Za-z_]{8}__$/);
       const values = await resolveCache(cache);
       assert.equal(values[id], 'resolved');
     });
@@ -123,22 +109,15 @@ describe('lib helpers', () => {
       hb._ensureInRestrictLayoutsTo('/tmp/a.hbs');
     });
 
-    it('falls back to readdir when glob with file types is unavailable', async () => {
-      const originalGlob = fs.glob;
-      fs.glob = undefined;
-
+    it('lists partials recursively with fs.glob', async () => {
       const hb = hbs.create();
       hb.express({
         partialsDir: path.join(issuesDir, '23/partials'),
         extname: '.hbs'
       });
 
-      try {
-        await hb.cachePartials();
-        assert.equal(hb.partialsManifest.length > 0, true);
-      } finally {
-        fs.glob = originalGlob;
-      }
+      await hb.cachePartials();
+      assert.equal(hb.partialsManifest.length > 0, true);
     });
 
     it('cacheLayout returns promise without callback', async () => {
