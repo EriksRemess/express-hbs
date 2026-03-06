@@ -120,6 +120,27 @@ describe('lib helpers', () => {
       assert.equal(hb.partialsManifest.length > 0, true);
     });
 
+    it('falls back when fs.glob does not support withFileTypes', async () => {
+      const hb = hbs.create();
+      const originalGlob = fs.glob;
+
+      fs.glob = async function* () {
+        throw new TypeError('fs.glob does not support options.withFileTypes yet. Please open an issue on GitHub.');
+      };
+
+      try {
+        hb.express({
+          partialsDir: path.join(issuesDir, '23/partials'),
+          extname: '.hbs'
+        });
+
+        await hb.cachePartials();
+        assert.equal(hb.partialsManifest.length > 0, true);
+      } finally {
+        fs.glob = originalGlob;
+      }
+    });
+
     it('cacheLayout returns promise without callback', async () => {
       const hb = hbs.create();
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-'));
