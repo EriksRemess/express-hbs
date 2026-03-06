@@ -1,5 +1,43 @@
-export function escapeExpression(string: any): any;
-export function isEmpty(value: any): boolean;
-export function createFrame(object: any): any;
-export function blockParams(params: any, ids: any): any;
-export function appendContextPath(contextPath: any, id: any): string;
+/**
+ * Escapes a value for safe HTML output.
+ *
+ * @param {unknown} string
+ * @returns {string}
+ */
+export function escapeExpression(string: unknown): string;
+/**
+ * Implements Handlebars emptiness semantics used by built-in helpers.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isEmpty(value: unknown): boolean;
+/**
+ * Creates a child data frame linked to a parent frame.
+ *
+ * @param {Record<string, unknown>} object
+ * @returns {Record<string, unknown> & { _parent: Record<string, unknown> }}
+ */
+export function createFrame(object: Record<string, unknown>): Record<string, unknown> & {
+    _parent: Record<string, unknown>;
+};
+/**
+ * Attaches block-param path metadata to the params array.
+ *
+ * @param {unknown[] & { path?: unknown }} params
+ * @param {unknown} ids
+ * @returns {unknown[] & { path: unknown }}
+ */
+export function blockParams(params: unknown[] & {
+    path?: unknown;
+}, ids: unknown): unknown[] & {
+    path: unknown;
+};
+/**
+ * Appends a child path segment to a Handlebars context path.
+ *
+ * @param {string | undefined} contextPath
+ * @param {string} id
+ * @returns {string}
+ */
+export function appendContextPath(contextPath: string | undefined, id: string): string;

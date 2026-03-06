@@ -18,7 +18,6 @@
   },
   "include": [
     "index.js",
-    "lib/generate-id.js",
     "lib/hbs.js",
     "lib/resolver.js"
   ],

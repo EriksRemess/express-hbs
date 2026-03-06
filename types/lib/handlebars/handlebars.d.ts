@@ -1,2 +1,2 @@
 export default inst;
-declare const inst: any;
+declare const inst: import("../handlebars.d.ts").LocalHandlebars;

@@ -1,3 +1,2 @@
 export default inst;
-declare const inst: HandlebarsEnvironment;
-import { HandlebarsEnvironment } from '#handlebars/base';
+declare const inst: import("../handlebars.d.ts").LocalHandlebars;
