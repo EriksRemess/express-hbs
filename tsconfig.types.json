@@ -17,7 +17,6 @@
     "skipLibCheck": true
   },
   "include": [
-    "index.js",
     "lib/hbs.js",
     "lib/resolver.js"
   ],

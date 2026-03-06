@@ -9,11 +9,11 @@
     "layout",
     "partials"
   ],
-  "main": "index.js",
-  "types": "types/index.d.ts",
+  "main": "lib/hbs.js",
+  "types": "types/lib/hbs.d.ts",
   "type": "module",
   "imports": {
-    "#hbs": "./index.js",
+    "#hbs": "./lib/hbs.js",
     "#handlebars": "./lib/handlebars/handlebars.js",
     "#handlebars/*": "./lib/handlebars/*.js",
     "#lib/*": "./lib/*.js",
@@ -21,7 +21,6 @@
     "#test/*": "./test/*.js"
   },
   "files": [
-    "index.js",
     "lib/",
     "types/",
     "README.md",

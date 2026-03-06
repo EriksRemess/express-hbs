@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import forkHbs from '../index.js';
+import forkHbs from '../lib/hbs.js';
 
 const require = createRequire(import.meta.url);
 
