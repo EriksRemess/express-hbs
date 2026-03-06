@@ -34,6 +34,11 @@ describe('local template options', () => {
       });
       const html = await renderTemplate(render, path.join(dirname, 'template.hbs'), locals);
       assert.strictEqual(stripWs(html), stripWs('Hello, Freddy Mercury'));
+      assert.deepEqual(locals._templateOptions, {
+        data: {
+          lastName: 'Mercury'
+        }
+      });
     });
 
     it('removes _templateOptions from the locals data', async () => {
@@ -58,6 +63,11 @@ describe('local template options', () => {
       });
       const html = await renderTemplate(render, path.join(dirname, 'data-access-template.hbs'), locals);
       assert.strictEqual(stripWs(html), stripWs(''));
+      assert.deepEqual(locals._templateOptions, {
+        data: {
+          lastName: 'Mercury'
+        }
+      });
     });
   });
 });

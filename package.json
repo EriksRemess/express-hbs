@@ -14,6 +14,9 @@
   "type": "module",
   "imports": {
     "#hbs": "./index.js",
+    "#handlebars": "./lib/handlebars/handlebars.js",
+    "#handlebars/*": "./lib/handlebars/handlebars/*.js",
+    "#handlebars/runtime-entry": "./lib/handlebars/handlebars.runtime.js",
     "#lib/*": "./lib/*.js",
     "#example/*": "./example/*.js",
     "#test/*": "./test/*.js"
@@ -32,7 +35,7 @@
     "example": "example"
   },
   "scripts": {
-    "lint": "eslint --ext .js --cache lib/**/*.js test/**/*.js example/**/*.js",
+    "lint": "eslint --ext .js --cache lib test example",
     "test": "node --test test/*.js",
     "posttest": "npm run lint",
     "types:clean": "rm -rf types",
@@ -65,8 +68,5 @@
     "globals": "^17.4.0",
     "i18n": "0.15.3",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "handlebars": "^4.7.8"
   }
 }

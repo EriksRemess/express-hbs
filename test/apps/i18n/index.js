@@ -20,18 +20,18 @@ function create(hbs, env) {
   if (env) process.env.NODE_ENV = env;
 
   const app = express();
-  const viewsDir = __dirname + '/views';
+  const viewsDir = path.join(__dirname, 'views');
 
   // minimal config
   i18n.configure({
     locales: ['en', 'fr'],
     cookie: 'locale',
-    directory: __dirname + '/locales'
+    directory: path.join(__dirname, 'locales')
   });
 
   // Hook in express-hbs and tell it where known directories reside
   app.engine('hbs', hbs.express({
-    i18n: i18n,
+    i18n,
     restrictLayoutsTo: viewsDir
   }));
   app.set('view engine', 'hbs');

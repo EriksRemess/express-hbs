@@ -14,7 +14,7 @@ export type EngineOptions = AnyObject & {
     refreshPartialsManifest?: boolean;
     contentHelperName?: string;
     blockHelperName?: string;
-    handlebars?: typeof handlebars.create;
+    handlebars?: typeof handlebars;
     i18n?: {
         __: Function;
         __n: Function;
@@ -26,9 +26,14 @@ export type EngineOptions = AnyObject & {
  * Handlebars view engine wrapper compatible with Express.
  */
 declare class ExpressHbs {
-    handlebars: typeof handlebars;
-    SafeString: typeof handlebars.SafeString;
-    Utils: typeof handlebars.Utils;
+    handlebars: import("./handlebars.js").LocalHandlebars;
+    SafeString: new (value: string) => {
+        toString(): string;
+        toHTML(): string;
+    };
+    Utils: {
+        escapeExpression(value: unknown): string;
+    };
     cwd: string;
     _options: {
         templateOptions: {};
@@ -329,4 +334,4 @@ declare class ExpressHbs {
      */
     ___express(filename: string, sourceOrOptions: AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback): void;
 }
-import handlebars from 'handlebars';
+import handlebars from './handlebars.js';

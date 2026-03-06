@@ -3,16 +3,15 @@ import { PassThrough } from 'node:stream';
 
 function normalizeHeaders(headers) {
   const normalized = {};
-  const keys = Object.keys(headers || {});
-  for (let i = 0; i < keys.length; i++) {
-    normalized[keys[i].toLowerCase()] = headers[keys[i]];
+
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    normalized[key.toLowerCase()] = value;
   }
+
   return normalized;
 }
 
-function requestInProcess(app, path, options) {
-  options = options || {};
-
+function requestInProcess(app, path, options = {}) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const socket = new PassThrough();
@@ -24,7 +23,7 @@ function requestInProcess(app, path, options) {
     const res = new http.ServerResponse(req);
     const chunks = [];
 
-    function finish(err, result) {
+    const finish = (err, result) => {
       if (settled) {
         return;
       }
@@ -34,14 +33,20 @@ function requestInProcess(app, path, options) {
         return;
       }
       resolve(result);
-    }
+    };
+
+    const pushChunk = (chunk, encoding) => {
+      if (!chunk) {
+        return;
+      }
+
+      chunks.push(Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(chunk, typeof encoding === 'string' ? encoding : 'utf8'));
+    };
 
     res.write = function(chunk, encoding, callback) {
-      if (chunk) {
-        chunks.push(Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk, typeof encoding === 'string' ? encoding : 'utf8'));
-      }
+      pushChunk(chunk, encoding);
       if (typeof encoding === 'function') {
         encoding();
       } else if (typeof callback === 'function') {
@@ -51,11 +56,7 @@ function requestInProcess(app, path, options) {
     };
 
     res.end = function(chunk, encoding, callback) {
-      if (chunk) {
-        chunks.push(Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk, typeof encoding === 'string' ? encoding : 'utf8'));
-      }
+      pushChunk(chunk, encoding);
       if (typeof encoding === 'function') {
         encoding();
       } else if (typeof callback === 'function') {
@@ -126,15 +127,14 @@ function close(server) {
   });
 }
 
-async function requestWithFetch(app, path, options) {
-  options = options || {};
+async function requestWithFetch(app, path, options = {}) {
   const server = http.createServer(app);
   await listen(server);
 
   try {
     const address = server.address();
-    const response = await fetch('http://127.0.0.1:' + address.port + path, {
-      method: options.method || 'GET',
+    const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+      method: options.method ?? 'GET',
       headers: options.headers,
       body: options.body
     });

@@ -1,16 +1,12 @@
-export const stripWs = (s) => s.replace( /\s+/g, '' );
+export const stripWs = (s) => s.replace(/\s+/g, '');
 
-export function createLocals(which, viewsDir, locals) {
-  if (!locals) locals = {};
+export function createLocals(which, viewsDir, locals = {}) {
   const opts = {};
   if (which === 'express') {
-    opts.settings = {
-      views: viewsDir
-    };
+    opts.settings = { views: viewsDir };
     opts.cache = process.env.NODE_ENV === 'production';
-    for (const k in locals) {
-      if (!locals.hasOwnProperty(k)) continue;
-      opts[k] = locals[k];
+    for (const [key, value] of Object.entries(locals)) {
+      opts[key] = value;
     }
   }
   return opts;
@@ -31,7 +27,7 @@ export function renderTemplate(render, filename, options) {
 export function renderTemplateResult(render, filename, options) {
   return new Promise((resolve) => {
     render(filename, options, (err, html) => {
-      resolve({ err: err, html: html });
+      resolve({ err, html });
     });
   });
 }

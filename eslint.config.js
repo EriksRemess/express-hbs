@@ -3,6 +3,9 @@ import globals from 'globals';
 export default [
   {
     files: ['**/*.js'],
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error'
+    },
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -33,7 +36,14 @@ export default [
       'no-new-func': 0,
       'no-shadow': 0,
       'no-underscore-dangle': 0,
-      'no-unused-vars': 2,
+      'no-unused-vars': [2, {
+        args: 'after-used',
+        argsIgnorePattern: '^_',
+        caughtErrors: 'all',
+        caughtErrorsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_',
+        ignoreRestSiblings: false
+      }],
       'quotes': [2, 'single', 'avoid-escape'],
       'radix': 2,
       'keyword-spacing': 'error',

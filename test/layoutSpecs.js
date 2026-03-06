@@ -1,33 +1,13 @@
 import layoutsDirApp from '#example/app-layoutsDir';
 import hbs from '#hbs';
 import { dirnameFromMeta } from '#test/fixtures/paths';
-import { renderTemplate, renderTemplateResult } from '#test/helpers';
+import { createLocals, renderTemplate, renderTemplateResult, stripWs } from '#test/helpers';
 import { request } from '#test/http';
 import { beforeEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
 import path from 'node:path';
 
 const __dirname = dirnameFromMeta(import.meta.url);
-
-
-const stripWs = (s) => s.replace( /\s+/g, '' );
-
-function createLocals(which, viewsDir, locals) {
-  if (!locals) locals = {};
-  const opts = {};
-  if (which === 'express') {
-    opts.settings = {
-      views: viewsDir
-    };
-    opts.cache = process.env.NODE_ENV === 'production';
-    opts.settings.views = viewsDir;
-    for (const k in locals) {
-      if (!locals.hasOwnProperty(k)) continue;
-      opts[k] = locals[k];
-    }
-  }
-  return opts;
-}
 
 describe('layouts', () => {
   describe('layoutsDir', () => {

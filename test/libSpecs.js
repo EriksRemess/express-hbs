@@ -3,21 +3,19 @@ import generateId from '#lib/generate-id';
 import { done, hasResolvers, resolve } from '#lib/resolver';
 import { fromHere } from '#test/fixtures/paths';
 import { describe, it } from '#test/testkit';
-import handlebars from 'handlebars';
+import handlebars from '#lib/handlebars';
 import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-const resolveCache = (cache) => new Promise((resolve, reject) => {
-  done(cache, (err, values) => {
-    if (err) {
-      reject(err);
-      return;
-    }
-    resolve(values);
-  });
-});
+const resolveCache = (cache) => new Promise((resolve, reject) => done(cache, (err, values) => {
+  if (err) {
+    reject(err);
+    return;
+  }
+  resolve(values);
+}));
 
 describe('lib helpers', () => {
   const issuesDir = fromHere(import.meta.url, 'issues');
@@ -328,6 +326,17 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       assert.equal(hb._replaceValue(12, []), 12);
       assert.equal(hb._replaceValue('text', []), 'text');
+    });
+
+    it('picks up helper changes after a template has already rendered', () => {
+      const instance = handlebars.create();
+      const template = instance.compile('{{format value}}');
+
+      instance.registerHelper('format', value => `a:${value}`);
+      assert.equal(template({ value: 'x' }), 'a:x');
+
+      instance.registerHelper('format', value => `b:${value}`);
+      assert.equal(template({ value: 'x' }), 'b:x');
     });
   });
 });

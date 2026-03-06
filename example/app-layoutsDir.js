@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const relative = (filePath) => path.join( __dirname, filePath );
+const relative = (filePath) => path.join(__dirname, filePath);
 
 function isMainModule() {
   if (!process.argv[1]) {
@@ -48,11 +48,10 @@ app.set('views', viewsDir);
 
 // Register sync helper
 hbs.registerHelper('link', (text, options) => {
-  const attrs = [];
-  for (const prop in options.hash) {
-    attrs.push(prop + '="' + options.hash[prop] + '"');
-  }
-  return new hbs.SafeString('<a ' + attrs.join(' ') + '>' + text + '</a>');
+  const attrs = Object.entries(options.hash)
+    .map(([name, value]) => `${name}="${value}"`)
+    .join(' ');
+  return new hbs.SafeString(`<a ${attrs}>${text}</a>`);
 });
 
 // Register async helpers

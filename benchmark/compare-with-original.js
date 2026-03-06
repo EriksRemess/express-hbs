@@ -231,20 +231,19 @@ function printSummary(aggregates) {
     const fork = aggregates.find((item) => item.engine === 'fork' && item.mode === mode);
     const original = aggregates.find((item) => item.engine === 'original' && item.mode === mode);
 
-    if (!fork || !original) {
-      continue;
+    if (fork && original) {
+      const deltaPct = ((original.avgMsMedian - fork.avgMsMedian) / original.avgMsMedian) * 100;
+      summaryRows.push({
+        mode,
+        comparison: 'fork vs original',
+        fasterPctMedian: Number(deltaPct.toFixed(2)),
+        interpretation: deltaPct >= 0 ? 'fork faster' : 'original faster'
+      });
     }
-
-    const deltaPct = ((original.avgMsMedian - fork.avgMsMedian) / original.avgMsMedian) * 100;
-    summaryRows.push({
-      mode: mode,
-      forkVsOriginalPctMedian: Number(deltaPct.toFixed(2)),
-      interpretation: deltaPct >= 0 ? 'fork faster' : 'original faster'
-    });
   }
 
   if (summaryRows.length > 0) {
-    console.log('\nComparison (positive means fork is faster):');
+    console.log('\nComparison (positive means the left side is faster):');
     console.table(summaryRows);
   }
 }
@@ -282,12 +281,15 @@ async function main() {
   console.log(`Profile=${profile}`);
   console.log(`Iterations=${iterations}, Warmup=${warmupIterations}, Items=${itemCount}, Rounds=${rounds}`);
 
+  const engineVariants = [
+    ['fork', forkHbs],
+    ['original', originalHbs]
+  ];
+
   for (let round = 0; round < rounds; round += 1) {
     for (const cacheEnabled of [false, true]) {
-      const orderSeed = round + (cacheEnabled ? 1 : 0);
-      const scenarioOrder = orderSeed % 2 === 0
-        ? [['fork', forkHbs], ['original', originalHbs]]
-        : [['original', originalHbs], ['fork', forkHbs]];
+      const shift = (round + (cacheEnabled ? 1 : 0)) % engineVariants.length;
+      const scenarioOrder = engineVariants.map((_, index) => engineVariants[(index + shift) % engineVariants.length]);
 
       for (const [name, engine] of scenarioOrder) {
         const sample = await runScenario(name, engine, cacheEnabled, selectedScenario);
