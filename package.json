@@ -59,10 +59,10 @@
     "node": ">=24"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.5.0",
     "cookie-parser": "1.4.7",
-    "eslint": "^10.0.2",
-    "express": "^5.2.1",
+    "eslint": "^10.0.3",
+    "express": "github:eriksremess/express#eriks-esm",
     "globals": "^17.4.0",
     "i18n": "0.15.3",
     "typescript": "^5.9.3"
