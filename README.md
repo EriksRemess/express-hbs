@@ -22,7 +22,7 @@ Full details: https://github.com/TryGhost/express-hbs/releases/tag/2.0.0
 
 If you're upgrading from v0.8.4 to v1.0.0 there are some potentially breaking changes to be aware of:
 
-1. Handlebars @v4.0.5 - please see the [handlebars v4.0 compatibility notes](https://github.com/wycats/handlebars.js/blob/master/release-notes.md#v400---september-1st-2015)
+1. Version 1 originally moved this project to Handlebars 4.0.5. The current fork now vendors a newer modernized Handlebars-derived runtime/compiler under `lib/handlebars/`.
 2. The file extension for partial files must now match the extension configured in `extname` - please see [the PR](https://github.com/TryGhost/express-hbs/pull/88)
 
 ## Usage

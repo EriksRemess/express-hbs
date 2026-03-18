@@ -383,6 +383,59 @@ test('parser supports advanced syntax used by the compiler/runtime', () => {
   }
 });
 
+test('compiled partials keep their original runtime helpers', () => {
+  const partialRuntime = handlebars.create();
+  const renderRuntime = handlebars.create();
+
+  partialRuntime.registerHelper('shout', value => String(value).toUpperCase());
+  renderRuntime.registerHelper('shout', value => String(value).toLowerCase());
+
+  renderRuntime.registerPartial(
+    'person',
+    partialRuntime.compile('{{shout name}}')
+  );
+
+  const template = renderRuntime.compile('Hello {{> person}}');
+  assert.equal(template({ name: 'MiXeD' }), 'Hello MIXED');
+});
+
+test('#each block params preserve the outer context', () => {
+  const template = handlebars.compile(
+    '{{someVal}}|{{#each profiles as |profile|}}{{profile.username}}:{{someVal}}|{{/each}}'
+  );
+
+  assert.equal(
+    template({
+      someVal: 'ROOT',
+      profiles: [
+        { username: 'u1', someVal: 'INNER1' },
+        { username: 'u2' }
+      ]
+    }),
+    'ROOT|u1:ROOT|u2:ROOT|'
+  );
+});
+
+test('helpers can access the current partial name', () => {
+  const instance = handlebars.create();
+
+  instance.registerHelper('whereAmI', options => options.partialName ?? 'root');
+  instance.registerPartial('card', '[{{whereAmI}}]');
+
+  const template = instance.compile('{{whereAmI}} {{> card}}');
+  assert.equal(template({}), 'root [card]');
+});
+
+test('escaped output replaces forbidden code points', () => {
+  const template = handlebars.compile('{{name}}');
+  assert.equal(template({ name: 'A\u0002B' }), 'A\uFFFDB');
+});
+
+test('templates containing NULL characters still compile and render', () => {
+  const template = handlebars.compile('Hello \x00 {{name}}');
+  assert.equal(template({ name: 'foo' }), 'Hello \x00 foo');
+});
+
 async function collectTemplates(directories) {
   const results = [];
 
