@@ -1,4 +1,6 @@
 import hbs from '#hbs';
+import { HandlebarsEnvironment } from '#handlebars/base';
+import { createNewLookupObject } from '#handlebars/internal/create-new-lookup-object';
 import { done, hasResolvers, resolve } from '#lib/resolver';
 import { fromHere } from '#test/fixtures/paths';
 import { describe, it } from '#test/testkit';
@@ -48,6 +50,60 @@ describe('lib helpers', () => {
       assert.throws(() => resolve(null, () => {}, undefined), /Resolver cache must be a Map or an object/);
       assert.throws(() => resolve({}, null, undefined), /Resolver callback must be a function/);
       assert.throws(() => done({}, 'bad-callback'), /Resolver completion callback must be a function/);
+    });
+  });
+
+  describe('handlebars internals', () => {
+    it('creates lookup objects with null prototype and skips unsafe keys', () => {
+      const source = { safe: 'ok' };
+      Object.defineProperty(source, '__proto__', {
+        value: { ghost: 'bad' },
+        enumerable: true
+      });
+
+      const lookup = createNewLookupObject(source);
+      assert.equal(lookup.safe, 'ok');
+      assert.equal(lookup.ghost, undefined);
+      assert.equal(Object.hasOwn(lookup, '__proto__'), false);
+      assert.equal(Object.getPrototypeOf(lookup), null);
+    });
+
+    it('uses prototype-safe registries and rejects reserved registry names', () => {
+      const env = new HandlebarsEnvironment();
+      const helper = () => 'ok';
+      const decorator = fn => fn;
+
+      const helperBatch = { safe: helper };
+      Object.defineProperty(helperBatch, '__proto__', {
+        value: { polluted: true },
+        enumerable: true
+      });
+
+      env.registerHelper(helperBatch);
+      env.registerPartial('safe-partial', 'partial');
+      env.registerDecorator('safe-decorator', decorator);
+
+      assert.equal(Object.getPrototypeOf(env.helpers), null);
+      assert.equal(Object.getPrototypeOf(env.partials), null);
+      assert.equal(Object.getPrototypeOf(env.decorators), null);
+      assert.equal(env.helpers.safe, helper);
+      assert.equal(Object.hasOwn(env.helpers, '__proto__'), false);
+      assert.equal({}.polluted, undefined);
+
+      assert.throws(() => env.registerHelper('__proto__', helper), /reserved name/);
+      assert.throws(() => env.registerPartial('constructor', 'x'), /reserved name/);
+      assert.throws(() => env.registerDecorator('prototype', decorator), /reserved name/);
+    });
+
+    it('does not resolve prototype-inherited partials from render options', () => {
+      const template = handlebars.compile('{{> ghost}}');
+      const partials = {};
+      Object.defineProperty(partials, '__proto__', {
+        value: { ghost: 'polluted' },
+        enumerable: true
+      });
+
+      assert.throws(() => template({}, { partials }), /could not be found/);
     });
   });
 
