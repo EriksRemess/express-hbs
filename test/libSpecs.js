@@ -68,6 +68,11 @@ describe('lib helpers', () => {
       assert.deepEqual(hb.getLocalTemplateOptions(locals), { x: 1 });
     });
 
+    it('rejects invalid locals for local template options', () => {
+      const hb = hbs.create();
+      assert.throws(() => hb.updateLocalTemplateOptions(null, { x: 1 }), /locals must be an object/);
+    });
+
     it('covers merge branches for arrays, nested objects and unsafe keys', () => {
       const hb = hbs.create();
       hb.updateTemplateOptions({
@@ -159,6 +164,7 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       assert.throws(() => hb.express({ extname: '../x' }), /extname must be a non-empty file extension string/);
       assert.throws(() => hb.express({ partialsDir: ['', issuesDir] }), /partialsDir entries must be non-empty strings/);
+      assert.throws(() => hb.express('bad'), /options must be an object/);
     });
 
     it('lists partials recursively with fs.glob', async () => {
@@ -372,6 +378,28 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       hb.registerAsyncHelper('x', (value, cb) => cb(value));
       assert.throws(() => hb.handlebars.helpers.x.call({}, 'hello'), /Could not find resolver cache/);
+    });
+
+    it('rejects invalid render options and callbacks', async () => {
+      const hb = hbs.create();
+      hb.express({
+        restrictLayoutsTo: issuesDir
+      });
+
+      await assert.rejects(
+        hb._renderFile(path.join(issuesDir, '23/index.hbs'), null, 'bad'),
+        /render options must be an object/
+      );
+
+      await assert.rejects(
+        hb._renderFile(path.join(issuesDir, '23/index.hbs'), null, { settings: { views: [''] } }),
+        /views entries must be non-empty strings/
+      );
+
+      assert.throws(
+        () => hb.___express(path.join(issuesDir, '23/index.hbs'), {}, {}),
+        /Render callback must be a function/
+      );
     });
 
     it('rejects unresolved async placeholder loops', async () => {
