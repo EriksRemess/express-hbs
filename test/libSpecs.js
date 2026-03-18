@@ -43,6 +43,12 @@ describe('lib helpers', () => {
       });
       await assert.rejects(done(cache), /boom/);
     });
+
+    it('should reject invalid resolver inputs', () => {
+      assert.throws(() => resolve(null, () => {}, undefined), /Resolver cache must be a Map or an object/);
+      assert.throws(() => resolve({}, null, undefined), /Resolver callback must be a function/);
+      assert.throws(() => done({}, 'bad-callback'), /Resolver completion callback must be a function/);
+    });
   });
 
   describe('hbs internals', () => {
@@ -102,11 +108,57 @@ describe('lib helpers', () => {
       assert.deepEqual(templateOptions, {});
     });
 
+    it('skips unsafe keys when cloning render locals', () => {
+      const hb = hbs.create();
+      const locals = {
+        _templateOptions: {},
+        name: 'ok'
+      };
+      Object.defineProperty(locals, '__proto__', {
+        value: { polluted: true },
+        enumerable: true
+      });
+
+      const template = (localsArg) => ({
+        name: localsArg.name,
+        polluted: localsArg.polluted,
+        hasProtoKey: Object.hasOwn(localsArg, '__proto__')
+      });
+      template.__filename = 'x.hbs';
+
+      const result = hb._renderTemplate(template, locals);
+      assert.equal(result.name, 'ok');
+      assert.equal(result.polluted, undefined);
+      assert.equal(result.hasProtoKey, false);
+      assert.equal({}.polluted, undefined);
+    });
+
     it('handles path helpers edge cases', () => {
       const hb = hbs.create();
       assert.equal(hb.layoutPath('/tmp/a.hbs', 'layout', []), undefined);
+      assert.throws(() => hb.layoutPath('/tmp/a.hbs', {}, '/tmp'), /layout must be a non-empty string/);
       assert.equal(hb._toErrorFilename(undefined, '/tmp'), undefined);
       hb._ensureInRestrictLayoutsTo('/tmp/a.hbs');
+    });
+
+    it('uses null-prototype block caches for helper-controlled names', () => {
+      const hb = hbs.create();
+      const blockCache = Object.create(null);
+
+      hb.content('__proto__', {
+        data: { root: { blockCache } },
+        fn: () => 'safe'
+      }, null);
+
+      assert.equal(Array.isArray(blockCache.__proto__), true);
+      assert.equal(Object.getPrototypeOf(blockCache), null);
+      assert.equal({}.safe, undefined);
+    });
+
+    it('rejects malformed engine path options', () => {
+      const hb = hbs.create();
+      assert.throws(() => hb.express({ extname: '../x' }), /extname must be a non-empty file extension string/);
+      assert.throws(() => hb.express({ partialsDir: ['', issuesDir] }), /partialsDir entries must be non-empty strings/);
     });
 
     it('lists partials recursively with fs.glob', async () => {
@@ -320,6 +372,14 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       hb.registerAsyncHelper('x', (value, cb) => cb(value));
       assert.throws(() => hb.handlebars.helpers.x.call({}, 'hello'), /Could not find resolver cache/);
+    });
+
+    it('rejects unresolved async placeholder loops', async () => {
+      const hb = hbs.create();
+      await assert.rejects(
+        hb._resolveAsyncHtml(Object.create(null), '__aSyNcId__not-real'),
+        /unresolved async placeholder/i
+      );
     });
 
     it('replaceValue returns input for non-string or empty replacement list', () => {
