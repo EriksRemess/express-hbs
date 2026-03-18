@@ -466,6 +466,38 @@ describe('lib helpers', () => {
       );
     });
 
+    it('resolves nested async placeholder chains', async () => {
+      const hb = hbs.create();
+      const firstId = '__aSyNcId__<_aaaaaaab__';
+      const secondId = '__aSyNcId__<_aaaaaaac__';
+
+      const resolverCache = {
+        [firstId]: Promise.resolve(secondId),
+        [secondId]: Promise.resolve('done')
+      };
+
+      assert.equal(
+        await hb._resolveAsyncHtml(resolverCache, `<p>${firstId}</p>`),
+        '<p>done</p>'
+      );
+    });
+
+    it('rejects cyclic async placeholder chains', async () => {
+      const hb = hbs.create();
+      const firstId = '__aSyNcId__<_aaaaaaab__';
+      const secondId = '__aSyNcId__<_aaaaaaac__';
+
+      const resolverCache = {
+        [firstId]: Promise.resolve(secondId),
+        [secondId]: Promise.resolve(firstId)
+      };
+
+      await assert.rejects(
+        hb._resolveAsyncHtml(resolverCache, firstId),
+        /unresolved async placeholder/i
+      );
+    });
+
     it('replaceValue returns input for non-string or empty replacement list', () => {
       const hb = hbs.create();
       assert.equal(hb._replaceValue(12, []), 12);
