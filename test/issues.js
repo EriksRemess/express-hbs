@@ -8,6 +8,9 @@ import {
 } from '#test/helpers';
 import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 const createLocals = (dirname, locals) => createExpressLocals('express', dirname, locals);
 
@@ -407,6 +410,39 @@ describe('issue-270', () => {
     const result = await renderTemplateResult(render, indexFile, locals);
     assert(result.err);
     assert(result.err.message.includes('does not reside in'));
+  });
+
+  it('should reject layouts that escape restrictLayoutsTo through symlinks', async () => {
+    const hb = hbs.create();
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'express-hbs-issue-270-'));
+    const symlinkTarget = path.join(tempRoot, 'outside', 'default.hbs');
+
+    try {
+      const tempViewsDir = path.join(tempRoot, 'views');
+      const tempLayoutsDir = path.join(tempViewsDir, 'layouts');
+      const indexPath = path.join(tempViewsDir, 'index.hbs');
+      const symlinkPath = path.join(tempLayoutsDir, 'linked.hbs');
+
+      await fs.mkdir(tempLayoutsDir, { recursive: true });
+      await fs.mkdir(path.dirname(symlinkTarget), { recursive: true });
+      await fs.writeFile(indexPath, 'Hello');
+      await fs.writeFile(symlinkTarget, '<outside>{{{body}}}</outside>');
+      await fs.symlink(symlinkTarget, symlinkPath);
+
+      const render = hb.express({
+        restrictLayoutsTo: tempViewsDir
+      });
+      const locals = createLocals(tempViewsDir, {
+        cache: true,
+        layout: symlinkPath
+      });
+
+      const result = await renderTemplateResult(render, indexPath, locals);
+      assert(result.err);
+      assert(result.err.message.includes('does not reside in'));
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
   });
 });
 
