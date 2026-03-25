@@ -23,7 +23,13 @@ describe('lib helpers', () => {
 
   describe('resolver', () => {
     it('should detect resolver token at string start', () => {
-      assert.equal(hasResolvers('__aSyNcId__x'), true);
+      assert.equal(hasResolvers('__aSyNcId__<_aaaaaaab__'), true);
+      assert.equal(hasResolvers('__aSyNcId__&lt;_aaaaaaab__'), true);
+    });
+
+    it('should ignore literal async prefix text that is not a full token', () => {
+      assert.equal(hasResolvers('__aSyNcId__x'), false);
+      assert.equal(hasResolvers('literal __aSyNcId__ text'), false);
     });
 
     it('should support map-based resolver cache', async () => {
@@ -430,6 +436,60 @@ describe('lib helpers', () => {
       assert.throws(() => hb.compile(12), /registerPartial must be a string/);
     });
 
+    it('resets onCompile when reconfiguring the same instance', async () => {
+      const hb = hbs.create();
+      hb.express({
+        onCompile(_instance, source) {
+          return () => `compiled:${source}`;
+        }
+      });
+
+      assert.equal(await hb._renderFile('/tmp/inline.hbs', 'first', {}), 'compiled:first');
+
+      hb.express({});
+      assert.equal(await hb._renderFile('/tmp/inline.hbs', 'second', {}), 'second');
+    });
+
+    it('stops using external handlebars when a later express call omits them', async () => {
+      const hb = hbs.create();
+      const external = handlebars.create();
+      external.registerHelper('externalOnly', () => 'external');
+
+      hb.express({ handlebars: external });
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{externalOnly "x"}}', {}),
+        'external '
+      );
+
+      hb.express({});
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', '{{externalOnly "x"}}', {}),
+        /Missing helper|externalOnly/
+      );
+    });
+
+    it('removes i18n helpers when reconfiguring without i18n', async () => {
+      const hb = hbs.create();
+      hb.express({
+        i18n: {
+          __() {
+            return 'translated';
+          },
+          __n() {
+            return 'translated-many';
+          }
+        }
+      });
+
+      assert.equal(await hb._renderFile('/tmp/inline.hbs', '{{__ "x"}}', {}), 'translated ');
+
+      hb.express({});
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', '{{__ "x"}}', {}),
+        /Missing helper|Could not find property|__/
+      );
+    });
+
     it('registerAsyncHelper throws when resolver cache is missing', () => {
       const hb = hbs.create();
       hb.registerAsyncHelper('x', (value, cb) => cb(value));
@@ -461,7 +521,7 @@ describe('lib helpers', () => {
     it('rejects unresolved async placeholder loops', async () => {
       const hb = hbs.create();
       await assert.rejects(
-        hb._resolveAsyncHtml(Object.create(null), '__aSyNcId__not-real'),
+        hb._resolveAsyncHtml(Object.create(null), '__aSyNcId__<_aaaaaaab__'),
         /unresolved async placeholder/i
       );
     });
@@ -502,6 +562,15 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       assert.equal(hb._replaceValue(12, []), 12);
       assert.equal(hb._replaceValue('text', []), 'text');
+    });
+
+    it('does not treat literal async id prefixes as unresolved helpers', async () => {
+      const hb = hbs.create();
+      hb.registerAsyncHelper('x', (value, cb) => cb(value));
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', 'literal __aSyNcId__ text', {}),
+        'literal __aSyNcId__ text'
+      );
     });
 
     it('picks up helper changes after a template has already rendered', () => {
