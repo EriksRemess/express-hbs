@@ -200,6 +200,23 @@ describe('lib helpers', () => {
       assert.equal({}.polluted, undefined);
     });
 
+    it('restores top-level template options when rendering throws a string error', () => {
+      const hb = hbs.create();
+      const locals = {
+        _templateOptions: { x: 1 },
+        name: 'ok'
+      };
+
+      const template = () => {
+        throw 'boom';
+      };
+      template.isTop = true;
+      template.__filename = 'x.hbs';
+
+      assert.throws(() => hb._renderTemplate(template, locals), /\[x\.hbs\] boom/);
+      assert.deepEqual(locals._templateOptions, { x: 1 });
+    });
+
     it('handles path helpers edge cases', () => {
       const hb = hbs.create();
       assert.equal(hb.layoutPath('/tmp/a.hbs', 'layout', []), undefined);
@@ -374,6 +391,28 @@ describe('lib helpers', () => {
       assert.equal(hb.handlebars, external);
     });
 
+    it('syncs SafeString and Utils aliases when changing handlebars instances', () => {
+      const hb = hbs.create();
+      const originalSafeString = hb.SafeString;
+      const originalUtils = hb.Utils;
+      const external = handlebars.create();
+      class ExternalSafeString {}
+      external.SafeString = ExternalSafeString;
+      external.Utils = {
+        escapeExpression(value) {
+          return `external:${value}`;
+        }
+      };
+
+      hb.express({ handlebars: external });
+      assert.equal(hb.SafeString, ExternalSafeString);
+      assert.equal(hb.Utils, external.Utils);
+
+      hb.express({});
+      assert.equal(hb.SafeString, originalSafeString);
+      assert.equal(hb.Utils, originalUtils);
+    });
+
     it('supports express4 alias as drop-in replacement', () => {
       const hb = hbs.create();
       const render = hb.express4({});
@@ -426,6 +465,25 @@ describe('lib helpers', () => {
       await new Promise((resolve) => {
         hb.loadDefaultLayout(true, (err) => {
           assert(err);
+          resolve();
+        });
+      });
+    });
+
+    it('cachePartials callback returns success result', async () => {
+      const hb = hbs.create();
+      hb.express({
+        partialsDir: path.join(issuesDir, '23/partials'),
+        extname: '.hbs'
+      });
+
+      await new Promise((resolve, reject) => {
+        hb.cachePartials((err, result) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          assert.equal(result, true);
           resolve();
         });
       });
@@ -562,6 +620,32 @@ describe('lib helpers', () => {
       const hb = hbs.create();
       assert.equal(hb._replaceValue(12, []), 12);
       assert.equal(hb._replaceValue('text', []), 'text');
+    });
+
+    it('restores pre-existing body locals after rendering layouts and layout errors', () => {
+      const hb = hbs.create();
+      const locals = { body: 'original' };
+      const template = () => 'inner';
+      template.__filename = 'template.hbs';
+
+      const layout = (layoutLocals) => `<layout>${layoutLocals.body}</layout>`;
+      layout.__filename = 'layout.hbs';
+      assert.equal(
+        hb._renderWithLayouts(template, locals, [layout]),
+        '<layout>inner</layout>'
+      );
+      assert.equal(locals.body, 'original');
+
+      const failingLayout = () => {
+        throw new Error('layout failed');
+      };
+      failingLayout.__filename = 'layout.hbs';
+
+      assert.throws(
+        () => hb._renderWithLayouts(template, locals, [failingLayout]),
+        /layout failed/
+      );
+      assert.equal(locals.body, 'original');
     });
 
     it('does not treat literal async id prefixes as unresolved helpers', async () => {

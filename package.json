@@ -39,7 +39,7 @@
     "types:clean": "rm -rf types",
     "types:build": "tsc -p tsconfig.types.json && mkdir -p types/lib && cp lib/handlebars.d.ts types/lib/handlebars.d.ts",
     "types:rebuild": "npm run types:clean && npm run types:build",
-    "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' --test-coverage-include='example/**/*.js' test/*.js",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' test/*.js",
     "bench": "npm --prefix benchmark run compare",
     "bench:compare-original": "npm --prefix benchmark run compare",
     "bench:compare-original:async": "npm --prefix benchmark run compare:async"

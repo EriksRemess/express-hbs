@@ -1,9 +1,36 @@
 import { compile, precompile } from '#handlebars/compiler/compiler';
 import { parse, parseWithoutProcessing } from '#handlebars/compiler/parser';
+import Visitor from '#handlebars/compiler/visitor';
 import WhitespaceControl from '#handlebars/compiler/whitespace-control';
 import handlebars from '#handlebars';
 import { describe, it } from '#test/testkit';
 import assert from 'node:assert';
+
+const pathExpression = (original) => ({
+  type: 'PathExpression',
+  data: false,
+  depth: 0,
+  parts: [original],
+  original
+});
+
+const stringLiteral = (original) => ({
+  type: 'StringLiteral',
+  value: original,
+  original
+});
+
+const content = (value) => ({
+  type: 'ContentStatement',
+  original: value,
+  value
+});
+
+const program = (...body) => ({
+  type: 'Program',
+  body,
+  strip: {}
+});
 
 describe('compiler internals', () => {
   it('validates inputs and exposes lazy compile wrapper methods', () => {
@@ -11,11 +38,9 @@ describe('compiler internals', () => {
     assert.throws(() => compile(undefined), /You must pass a string or Handlebars AST to Handlebars.compile/);
 
     const hb = handlebars.create();
-    const template = compile('{{#if ok}}yes{{/if}}', {}, hb);
-
-    assert.equal(template({ ok: true }), 'yes');
+    const setupTemplate = compile('{{#if ok}}yes{{/if}}', {}, hb);
     assert.equal(
-      template._setup({
+      setupTemplate._setup({
         helpers: hb.helpers,
         partials: hb.partials,
         decorators: hb.decorators,
@@ -24,13 +49,21 @@ describe('compiler internals', () => {
       undefined
     );
 
-    const child = template._child(1, {}, undefined, undefined);
+    const childTemplate = compile('{{#if ok}}yes{{/if}}', {}, hb);
+    const child = childTemplate._child(1, {});
     assert.equal(typeof child, 'function');
     assert.equal(child({}, { data: {} }), 'yes');
 
-    const isolated = template._getIsolatedPartialState({});
+    const isolatedTemplate = compile('{{#if ok}}yes{{/if}}', {}, hb);
+    const isolated = isolatedTemplate._getIsolatedPartialState({});
     assert.equal(typeof isolated.helpers.if, 'function');
     assert.equal(typeof isolated.hooks.helperMissing, 'function');
+
+    const template = compile('{{#if ok}}yes{{/if}}', {}, hb);
+    assert.equal(
+      template({ ok: true }),
+      'yes'
+    );
   });
 
   it('covers helper resolution, partial compilation options, and decorator paths', () => {
@@ -61,6 +94,55 @@ describe('compiler internals', () => {
     assert.equal(hb.compile('{{#*inline "p"}}In{{/inline}}{{> p}}')({}), 'In');
     assert.equal(hb.compile('{{#> layout}}Body{{/layout}}')({}), '<div>Body</div>');
     assert.equal(hb.compile('{{> (lookup . "which")}}')({ which: 'greeting' }), 'Hello');
+  });
+
+  it('covers compiler mode semantics that commonly regress', () => {
+    const hb = handlebars.create();
+
+    assert.equal(
+      hb.compile('{{callable}}')({
+        name: 'Ada',
+        callable() {
+          return this.name;
+        }
+      }),
+      'Ada'
+    );
+
+    assert.equal(
+      hb.compile('{{#with child}}{{rootValue}}{{/with}}')({
+        rootValue: 'ROOT',
+        child: {}
+      }),
+      ''
+    );
+    assert.equal(
+      hb.compile('{{#with child}}{{rootValue}}{{/with}}', { compat: true })({
+        rootValue: 'ROOT',
+        child: {}
+      }),
+      'ROOT'
+    );
+
+    assert.equal(
+      hb.compile('{{user.name}}')({}),
+      ''
+    );
+    assert.equal(
+      hb.compile('{{user.name}}', { assumeObjects: true })({
+        user: { name: 'Ada' }
+      }),
+      'Ada'
+    );
+    assert.throws(
+      () => hb.compile('{{#if user.name}}yes{{/if}}', { assumeObjects: true })({}),
+      /Cannot read properties of undefined/
+    );
+
+    assert.throws(
+      () => hb.compile('{{user.name}}', { strict: true })({}),
+      /"name" not defined in undefined/
+    );
   });
 
   it('supports stringParams and trackIds together for params and hashes', () => {
@@ -123,6 +205,80 @@ describe('compiler internals', () => {
     assert.equal(captured.hashIds.dyn, true);
   });
 
+  it('covers AST-only compiler branches and non-string literal params', () => {
+    const hb = handlebars.create();
+    hb.registerPartial('p', 'A\nB');
+
+    const indentedPartialAst = program({
+      type: 'PartialStatement',
+      name: pathExpression('p'),
+      params: [],
+      hash: null,
+      indent: '  ',
+      strip: { open: false, close: false }
+    });
+    assert.equal(compile(indentedPartialAst, {}, hb)({}), '  A\n  B');
+    assert.equal(compile(indentedPartialAst, { preventIndent: true }, hb)({}), '  A\nB');
+
+    const literalPathAst = program({
+      type: 'MustacheStatement',
+      path: { type: 'NumberLiteral', value: 0, original: 0 },
+      params: [],
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    assert.equal(compile(literalPathAst, {}, hb)({ 0: 'zero' }), 'zero');
+
+    let captured;
+    hb.registerHelper('inspect', function(...args) {
+      const options = args.pop();
+      captured = {
+        args,
+        ids: options.ids,
+        hash: options.hash,
+        hashIds: options.hashIds
+      };
+      return 'ok';
+    });
+    assert.equal(
+      hb.compile('{{inspect 1 true undefined null key=foo}}', { trackIds: true })({ foo: 'FOO' }),
+      'ok'
+    );
+    assert.deepEqual(captured.args, [1, true, null, null]);
+    assert.deepEqual(captured.ids, [null, null, null, null]);
+    assert.equal(captured.hash.key, 'FOO');
+    assert.equal(captured.hashIds.key, 'foo');
+
+    const compatAst = program({
+      type: 'MustacheStatement',
+      path: {
+        type: 'PathExpression',
+        data: false,
+        depth: 1,
+        parts: ['name'],
+        original: '../name'
+      },
+      params: [],
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    const compatSpec = precompile(compatAst, { compat: true });
+    assert.match(compatSpec, /"useDepths":true/);
+    assert.match(compatSpec, /depths\[1\]/);
+
+    const badAst = program({
+      type: 'MustacheStatement',
+      path: { type: 'Nope' },
+      params: [],
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    assert.throws(
+      () => compile(badAst, {}, hb)({}),
+      /Unknown type: Nope/
+    );
+  });
+
   it('applies whitespace control for standalone and inline strip cases', () => {
     const standalone = parse('a\n{{! c }}\nb');
     assert.equal(standalone.body[2].value, 'b');
@@ -143,5 +299,211 @@ describe('compiler internals', () => {
       '{{#if a}}\nA\n{{else if b}}\nB\n{{else}}\nC\n{{/if}}'
     ));
     assert.equal(chained.body[0].inverse.chained, true);
+  });
+
+  it('covers visitor mutation, traversal, and validation branches', () => {
+    const baseVisitor = new Visitor();
+    const partialBlockAst = program({
+      type: 'PartialBlockStatement',
+      name: pathExpression('layout'),
+      params: [stringLiteral('x')],
+      hash: {
+        type: 'Hash',
+        pairs: [
+          {
+            type: 'HashPair',
+            key: 'greeting',
+            value: stringLiteral('hello')
+          }
+        ]
+      },
+      program: program(content('body'))
+    });
+    assert.equal(baseVisitor.accept(partialBlockAst), undefined);
+
+    class RemovingVisitor extends Visitor {
+      mutating = true;
+
+      StringLiteral(node) {
+        if (node.original === 'drop') {
+          return false;
+        }
+      }
+    }
+
+    const removingVisitor = new RemovingVisitor();
+    const mustache = {
+      type: 'MustacheStatement',
+      path: pathExpression('echo'),
+      params: [stringLiteral('drop'), stringLiteral('keep')],
+      hash: {
+        type: 'Hash',
+        pairs: []
+      }
+    };
+    removingVisitor.accept(mustache);
+    assert.deepEqual(mustache.params.map(param => param.original), ['keep']);
+
+    const retainedPath = pathExpression('retain');
+    assert.equal(removingVisitor.accept(retainedPath), retainedPath);
+    assert.equal(removingVisitor.accept(stringLiteral('drop')), undefined);
+
+    class InvalidTypeVisitor extends Visitor {
+      mutating = true;
+
+      PathExpression() {
+        return { type: 'Nope' };
+      }
+    }
+
+    assert.throws(
+      () => new InvalidTypeVisitor().accept({
+        type: 'MustacheStatement',
+        path: pathExpression('bad'),
+        params: [],
+        hash: null
+      }),
+      /Unexpected node type "Nope"/
+    );
+
+    assert.throws(() => baseVisitor.accept({ type: 'Nope' }), /Unknown type: Nope/);
+    assert.throws(() => baseVisitor.accept({ type: 'HashPair' }), /HashPair requires value/);
+  });
+
+  it('covers whitespace-control standalone and block-like helper branches', () => {
+    class ProgramWhitespaceControl extends WhitespaceControl {
+      PartialStatement = () => ({ inlineStandalone: true });
+      BlockStatement = () => ({
+        openStandalone: true,
+        closeStandalone: true,
+        open: true,
+        close: true
+      });
+    }
+
+    const standaloneControl = new ProgramWhitespaceControl();
+    const standalonePartial = program(
+      content('  '),
+      { type: 'PartialStatement', indent: '', strip: {} },
+      content('\n')
+    );
+    standaloneControl.accept(standalonePartial);
+    assert.equal(standalonePartial.body[0].value, '');
+    assert.equal(standalonePartial.body[0].leftStripped, true);
+    assert.equal(standalonePartial.body[1].indent, '  ');
+    assert.equal(standalonePartial.body[2].value, '');
+    assert.equal(standalonePartial.body[2].rightStripped, true);
+
+    const standaloneBlock = program({
+      type: 'BlockStatement',
+      program: program(content('\n  yes')),
+      inverse: program(content('  no\n'))
+    });
+    new ProgramWhitespaceControl().accept(standaloneBlock);
+    assert.equal(standaloneBlock.body[0].program.body[0].value, '  yes');
+    assert.equal(standaloneBlock.body[0].program.body[0].rightStripped, true);
+    assert.equal(standaloneBlock.body[0].inverse.body[0].leftStripped, false);
+
+    const whitespaceControl = new WhitespaceControl();
+    delete whitespaceControl.BlockStatement;
+    delete whitespaceControl.DecoratorBlock;
+    delete whitespaceControl.PartialBlockStatement;
+    delete whitespaceControl.Decorator;
+    delete whitespaceControl.MustacheStatement;
+    delete whitespaceControl.PartialStatement;
+    const visitBlockStatement = whitespaceControl.BlockStatement.bind(whitespaceControl);
+    const visitDecoratorBlock = whitespaceControl.DecoratorBlock.bind(whitespaceControl);
+    const visitPartialBlockStatement = whitespaceControl.PartialBlockStatement.bind(whitespaceControl);
+    const visitDecorator = whitespaceControl.Decorator.bind(whitespaceControl);
+    const visitMustacheStatement = whitespaceControl.MustacheStatement.bind(whitespaceControl);
+    const visitPartialStatement = whitespaceControl.PartialStatement.bind(whitespaceControl);
+    const visitCommentStatement = whitespaceControl.CommentStatement.bind(whitespaceControl);
+    const leafBlock = {
+      type: 'BlockStatement',
+      path: pathExpression('if'),
+      params: [pathExpression('c')],
+      hash: null,
+      program: program(content('  leaf  ')),
+      inverse: program(content('  final  ')),
+      openStrip: { open: false, close: false },
+      inverseStrip: { open: false, close: false },
+      closeStrip: { open: false, close: false }
+    };
+    const middleBlock = {
+      type: 'BlockStatement',
+      path: pathExpression('if'),
+      params: [pathExpression('b')],
+      hash: null,
+      program: program(content('  inner  ')),
+      inverse: {
+        type: 'Program',
+        chained: true,
+        body: [leafBlock],
+        strip: {}
+      },
+      openStrip: { open: true, close: true },
+      inverseStrip: { open: true, close: true },
+      closeStrip: { open: true, close: false }
+    };
+    const topBlock = {
+      type: 'BlockStatement',
+      path: pathExpression('if'),
+      params: [pathExpression('a')],
+      hash: null,
+      program: program(content('  main  ')),
+      inverse: {
+        type: 'Program',
+        chained: true,
+        body: [middleBlock],
+        strip: {}
+      },
+      openStrip: { open: false, close: true },
+      inverseStrip: { open: true, close: true },
+      closeStrip: { open: true, close: false }
+    };
+
+    const strip = visitBlockStatement(topBlock);
+    assert.deepEqual(strip, {
+      open: false,
+      close: false,
+      openStandalone: false,
+      closeStandalone: false
+    });
+    assert.equal(topBlock.program.body[0].value, 'main');
+    assert.equal(middleBlock.program.body[0].value, 'inner');
+
+    const decoratorBlock = {
+      ...topBlock,
+      type: 'DecoratorBlock',
+      program: program(content('\nbody')),
+      inverse: null
+    };
+    const partialBlock = {
+      type: 'PartialBlockStatement',
+      name: pathExpression('layout'),
+      params: [],
+      hash: null,
+      program: program(content('\nbody')),
+      openStrip: { open: false, close: false },
+      closeStrip: { open: true, close: false }
+    };
+    assert.equal(typeof visitDecoratorBlock(decoratorBlock), 'object');
+    assert.equal(typeof visitPartialBlockStatement(partialBlock), 'object');
+    assert.deepEqual(
+      visitDecorator({ strip: { open: true, close: false } }),
+      { open: true, close: false }
+    );
+    assert.deepEqual(
+      visitMustacheStatement({ strip: { open: false, close: true } }),
+      { open: false, close: true }
+    );
+    assert.deepEqual(
+      visitPartialStatement({ strip: { open: true, close: false } }),
+      { inlineStandalone: true, open: true, close: false }
+    );
+    assert.deepEqual(
+      visitCommentStatement({ strip: { open: false, close: true } }),
+      { inlineStandalone: true, open: false, close: true }
+    );
   });
 });

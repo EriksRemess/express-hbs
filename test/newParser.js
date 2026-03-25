@@ -308,6 +308,216 @@ test('parser handles representative inline syntax', () => {
         }],
         strip: {}
       }
+    },
+    {
+      source: '{{../name}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 1,
+            parts: ['name'],
+            original: '../name'
+          },
+          params: [],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{..}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 1,
+            parts: [],
+            original: '..'
+          },
+          params: [],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{@../index}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: true,
+            depth: 1,
+            parts: ['index'],
+            original: '@../index'
+          },
+          params: [],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{./name}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 0,
+            parts: ['name'],
+            original: './name'
+          },
+          params: [],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{this/name}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 0,
+            parts: ['name'],
+            original: 'this/name'
+          },
+          params: [],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{!-- visible --}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'CommentStatement',
+          value: ' visible ',
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{*decorator foo=bar}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'Decorator',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 0,
+            parts: ['decorator'],
+            original: 'decorator'
+          },
+          params: [],
+          hash: {
+            type: 'Hash',
+            pairs: [{
+              type: 'HashPair',
+              key: 'foo',
+              value: {
+                type: 'PathExpression',
+                data: false,
+                depth: 0,
+                parts: ['bar'],
+                original: 'bar'
+              }
+            }]
+          },
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{& value}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 0,
+            parts: ['value'],
+            original: 'value'
+          },
+          params: [],
+          escaped: false,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
+    },
+    {
+      source: '{{foo (bar key=value)}}',
+      expected: {
+        type: 'Program',
+        body: [{
+          type: 'MustacheStatement',
+          path: {
+            type: 'PathExpression',
+            data: false,
+            depth: 0,
+            parts: ['foo'],
+            original: 'foo'
+          },
+          params: [{
+            type: 'SubExpression',
+            path: {
+              type: 'PathExpression',
+              data: false,
+              depth: 0,
+              parts: ['bar'],
+              original: 'bar'
+            },
+            params: [],
+            hash: {
+              type: 'Hash',
+              pairs: [{
+                type: 'HashPair',
+                key: 'key',
+                value: {
+                  type: 'PathExpression',
+                  data: false,
+                  depth: 0,
+                  parts: ['value'],
+                  original: 'value'
+                }
+              }]
+            }
+          }],
+          escaped: true,
+          strip: { open: false, close: false }
+        }],
+        strip: {}
+      }
     }
   ];
 
@@ -320,14 +530,47 @@ test('parser handles representative inline syntax', () => {
   }
 });
 
+test('plain "as" params do not trigger block-param parsing', () => {
+  const ast = normalizeAst(parse('{{#helper last as thing}}x{{/helper}}'));
+  const [block] = ast.body;
+
+  assert.equal(block.type, 'BlockStatement');
+  assert.deepStrictEqual(
+    block.params.map(param => param.original),
+    ['last', 'as', 'thing']
+  );
+  assert.equal(block.program.blockParams, undefined);
+  assert.equal(block.program.body[0].value, 'x');
+});
+
 test('parser rejects representative invalid templates', () => {
   const samples = [
     '{{#if a}}',
     '{{#if a}}{{/each}}',
     '{{!-- unterminated',
     '{{foo (bar}}',
+    '{{foo (=bar)}}',
+    '{{((bar))}}',
+    '{{foo ((bar))}}',
+    '{{#(foo)}}x{{/(foo)}}',
+    '{{#if x as |y}}{{/if}}',
+    '{{#if x as |}}{{/if}}',
+    '{{#if x as|y|}}{{/if}}',
+    '{{#if x as |y| z}}{{/if}}',
     '{{/if}}',
-    '{{else}}'
+    '{{else}}',
+    '{{{{/raw}}}}',
+    '{{{{(foo)}}}}x{{{{/(foo)}}}}',
+    '{{{name}}',
+    '{{#if a}}{{else if b}}',
+    '{{#if a}}{{else if b}}{{/each}}',
+    '{{{{raw}}}}x{{{{/other}}}}',
+    '{{foo..bar}}',
+    '{{foo//bar}}',
+    '{{foo./bar}}',
+    '{{foo/../bar}}',
+    '{{foo.}}',
+    '{{foo/}}'
   ];
 
   for (const source of samples) {
@@ -363,8 +606,38 @@ test('parser supports advanced syntax used by the compiler/runtime', () => {
       expected: 'ab'
     },
     {
+      name: 'block params after subexpression',
+      source: '{{#with (lookup row "as") as |item|}}{{item}}{{/with}}',
+      context: { row: { as: 'ok' } },
+      expected: 'ok'
+    },
+    {
+      name: 'parent depth path',
+      source: '{{#with child}}{{../name}}|{{../this.name}}{{/with}}',
+      context: { name: 'ROOT', child: { name: 'CHILD' } },
+      expected: 'ROOT|ROOT'
+    },
+    {
+      name: 'parent depth data path',
+      source: '{{#each rows}}{{#each cols}}{{@../index}}:{{@index}};{{/each}}{{/each}}',
+      context: { rows: [{ cols: [1, 2] }, { cols: [3] }] },
+      expected: '0:0;0:1;1:0;'
+    },
+    {
       name: 'else-if chain',
       source: '{{#if a}}A{{else if b}}B{{else}}C{{/if}}',
+      context: { a: false, b: true },
+      expected: 'B'
+    },
+    {
+      name: 'else-if chain with tab whitespace',
+      source: '{{#if a}}A{{else\tif b}}B{{else}}C{{/if}}',
+      context: { a: false, b: true },
+      expected: 'B'
+    },
+    {
+      name: 'else-if chain with newline whitespace',
+      source: '{{#if a}}A{{else\nif b}}B{{else}}C{{/if}}',
       context: { a: false, b: true },
       expected: 'B'
     },

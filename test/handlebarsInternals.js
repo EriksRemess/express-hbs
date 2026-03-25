@@ -7,6 +7,7 @@ import {
   resetLoggedProperties,
   resultIsAllowed
 } from '#handlebars/internal/proto-access';
+import { wrapHelper } from '#handlebars/internal/wrapHelper';
 import logger from '#handlebars/logger';
 import { template } from '#handlebars/runtime';
 import { createFrame } from '#handlebars/utils';
@@ -189,6 +190,7 @@ describe('handlebars unit internals', () => {
 
     hb.helpers.log.call({}, 'hash-level', { hash: { level: 'warn' } });
     hb.helpers.log.call({}, 'data-level', { hash: {}, data: { level: 3 } });
+    assert.equal(hb.helpers.log.call({}), undefined);
 
     assert.deepEqual(logCalls, [
       ['warn', ['hash-level']],
@@ -224,6 +226,24 @@ describe('handlebars unit internals', () => {
     assert.equal(emptyFrame._parent, null);
   });
 
+  it('wraps helpers without changing non-functions or call semantics', () => {
+    const passthrough = { helper: true };
+    assert.equal(wrapHelper(passthrough, () => undefined), passthrough);
+
+    const lookupProperty = (parent, key) => parent[key];
+    let lookedUp;
+    const wrapped = wrapHelper(function(value, options) {
+      lookedUp = options.lookupProperty(value, 'name');
+      return `${this.label}:${value.name}`;
+    }, lookupProperty);
+
+    const options = { hash: {} };
+    const result = wrapped.call({ label: 'ctx' }, { name: 'Ada' }, options);
+    assert.equal(result, 'ctx:Ada');
+    assert.equal(lookedUp, 'Ada');
+    assert.equal(options.lookupProperty, lookupProperty);
+  });
+
   it('covers with, each, and blockHelperMissing helper branches', () => {
     const hb = handlebars.create();
 
@@ -251,6 +271,18 @@ describe('handlebars unit internals', () => {
     assert.equal(withResult, 'with');
 
     assert.throws(() => hb.helpers.each.call({}, [1, 2]), /Must pass iterator to #each/);
+    assert.equal(
+      hb.helpers.each.call({ marker: 'ctx' }, () => [], {
+        fn() {
+          return 'bad';
+        },
+        inverse(context) {
+          assert.equal(context.marker, 'ctx');
+          return 'empty';
+        }
+      }),
+      'empty'
+    );
 
     const sparseResult = hb.helpers.each.call({}, [,'x'], {
       data: { contextPath: 'root' },
@@ -350,14 +382,57 @@ describe('handlebars unit internals', () => {
     const hb = handlebars.create();
     hb.registerPartial('greeting', 'Hello\n{{name}}');
     hb.registerPartial('dynamic', 'Dynamic');
+    hb.registerPartial('multiline', 'A\nB\n');
+    hb.registerHelper('peek', function(target, options) {
+      return options.lookupProperty(target, 'inherited') ?? 'blocked';
+    });
+    logger.log = () => {};
 
     const compiled = hb.compile('{{> greeting}}');
     assert.equal(compiled({ name: 'Ada' }), 'Hello\nAda');
     assert.equal(hb.compile('{{> (lookup . "partialName")}}')({ partialName: 'dynamic' }), 'Dynamic');
+    assert.equal(hb.compile('{{#> missing foo="BAR"}}{{foo}}:{{name}}{{/missing}}')({ name: 'Ada' }), 'BAR:Ada');
+    assert.equal(hb.compile('  {{> multiline}}')({}), '  A\nB\n');
+    assert.equal(hb.compile('{{peek target}}')({
+      target: Object.create({ inherited: 'secret' })
+    }), 'blocked');
+    assert.equal(hb.compile('{{peek target}}')({
+      target: Object.create({ inherited: 'secret' })
+    }, {
+      allowedProtoProperties: { inherited: true }
+    }), 'secret');
 
     const ast = hb.parse('{{value}}');
     assert.equal(ast.type, 'Program');
     assert.match(hb.precompile('{{value}}'), /main/);
+
+    const helperState = hb.compile('plain')._getIsolatedPartialState({});
+    assert.equal(helperState.helpers.helperMissing, undefined);
+    assert.equal(typeof helperState.hooks.helperMissing, 'function');
+    const permissiveHelperState = hb.compile('plain')._getIsolatedPartialState({
+      allowCallsToHelperMissing: true
+    });
+    assert.equal(typeof permissiveHelperState.helpers.helperMissing, 'function');
+    assert.equal(typeof permissiveHelperState.helpers.blockHelperMissing, 'function');
+
+    const runtimeOnly = handlebars.create();
+    runtimeOnly.compile = undefined;
+    runtimeOnly.registerPartial('raw', 'Hello {{name}}');
+    const runtimeOnlyTemplate = template({
+      main(container, context, helpers, partials, data) {
+        return container.invokePartial(partials.raw, context, {
+          name: 'raw',
+          data,
+          partials
+        });
+      },
+      usePartial: true,
+      useData: true
+    }, runtimeOnly);
+    assert.throws(
+      () => runtimeOnlyTemplate({ name: 'Ada' }),
+      /could not be compiled when running in runtime-only mode/
+    );
 
     const childTemplate = template({
       main() {
@@ -372,5 +447,80 @@ describe('handlebars unit internals', () => {
 
     assert.throws(() => childTemplate._child(1, {}, undefined, []), /must pass block params/);
     assert.throws(() => childTemplate._child(1, {}, [], undefined), /must pass parent depths/);
+  });
+
+  it('covers runtime container helper, program, data, and partial branches', () => {
+    const env = new HandlebarsEnvironment();
+
+    const helperBundleTemplate = template({
+      main(container) {
+        return container.helpers.literal;
+      }
+    }, env);
+    assert.equal(helperBundleTemplate({}, { helpers: { literal: 'ok' } }), 'ok');
+
+    const containerTemplate = template({
+      main(container, depth0, helpers, partials, data) {
+        return [
+          container.strict(depth0, 'name'),
+          container.lookup([{ name: null }, { name: 0 }, { name: 'Ada' }], 'name'),
+          container.program(1) === container.program(1),
+          container.data(data, 2)?.value,
+          container.mergeIfNeeded(null, { x: 1 }).x
+        ].join('|');
+      },
+      1() {
+        return 'child';
+      },
+      useData: true
+    }, env);
+    assert.equal(
+      containerTemplate(
+        { name: 'OK' },
+        {
+          data: {
+            value: 'leaf',
+            _parent: {
+              value: 'mid',
+              _parent: { value: 'top' }
+            }
+          }
+        }
+      ),
+      'OK|0|true|mid|1'
+    );
+
+    const hb = handlebars.create();
+    hb.registerPartial(
+      'p',
+      (_ctx, options) => `${options.data.contextPath ?? 'none'}|${options.data.partialName ?? 'none'}|${typeof options.data['partial-block']}`
+    );
+
+    const partialTemplate = hb.compile(
+      '{{#with person}}{{#> p .}}{{name}}{{/p}}{{/with}}',
+      { trackIds: true }
+    );
+    assert.equal(
+      partialTemplate({ person: { name: 'Ada' } }),
+      'person|p|function'
+    );
+
+    const fallbackContextPathTemplate = template({
+      main(container, depth0, helpers, partials, data) {
+        return container.invokePartial(partials.p, depth0, {
+          name: 'p',
+          data,
+          partials,
+          ids: ['']
+        });
+      },
+      useData: true,
+      usePartial: true
+    }, env);
+    env.registerPartial('p', (_ctx, options) => options.data.contextPath ?? 'root');
+    assert.equal(
+      fallbackContextPathTemplate({}, { data: { contextPath: 'root' } }),
+      'root'
+    );
   });
 });
