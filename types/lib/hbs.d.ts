@@ -3,6 +3,8 @@ export default _default;
 export type AnyObject = Record<string, unknown>;
 export type NodeStyleCallback = (err: Error | null, value?: unknown) => void;
 export type ExpressRenderCallback = (err: Error | null, html: string | null) => void;
+export type LocalHandlebars = import("./handlebars.d.ts").LocalHandlebars;
+export type CompileHook = (instance: ExpressHbs, source: string, filename?: string) => Function;
 export type EngineOptions = AnyObject & {
     extname?: string;
     cache?: boolean;
@@ -14,19 +16,20 @@ export type EngineOptions = AnyObject & {
     refreshPartialsManifest?: boolean;
     contentHelperName?: string;
     blockHelperName?: string;
-    handlebars?: typeof handlebars;
+    handlebars?: LocalHandlebars;
     i18n?: {
         __: Function;
         __n: Function;
     };
-    onCompile?: (instance: ExpressHbs, source: string, filename?: string) => Function;
+    onCompile?: CompileHook;
     templateOptions?: AnyObject;
 };
 /**
  * Handlebars view engine wrapper compatible with Express.
  */
 declare class ExpressHbs {
-    handlebars: import("./handlebars.js").LocalHandlebars;
+    /** @type {LocalHandlebars} */
+    handlebars: LocalHandlebars;
     SafeString: new (value: string) => {
         toString(): string;
         toHTML(): string;
@@ -50,6 +53,8 @@ declare class ExpressHbs {
     layoutsDir: any;
     restrictLayoutsTo: any;
     viewsDirOpt: any;
+    /** @type {CompileHook | undefined} */
+    onCompile: CompileHook | undefined;
     /**
      * Stores content for a named block.
      *
@@ -138,7 +143,6 @@ declare class ExpressHbs {
      * @returns {(filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void}
      */
     express(options: EngineOptions): (filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void;
-    onCompile: (instance: ExpressHbs, source: string, filename?: string) => Function;
     /**
      * Backward-compatible Express 4 alias for `express()`.
      *
@@ -334,4 +338,3 @@ declare class ExpressHbs {
      */
     ___express(filename: string, sourceOrOptions: AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback): void;
 }
-import handlebars from '#handlebars';

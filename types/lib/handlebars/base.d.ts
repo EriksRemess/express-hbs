@@ -8,9 +8,9 @@ export class HandlebarsEnvironment {
      * @param {Record<string, Function>} [decorators]
      */
     constructor(helpers?: Record<string, Function>, partials?: Record<string, string | Function>, decorators?: Record<string, Function>);
-    helpers: Record<string, Function>;
-    partials: Record<string, string | Function>;
-    decorators: Record<string, Function>;
+    helpers: any;
+    partials: any;
+    decorators: any;
     helperRevision: number;
     partialRevision: number;
     decoratorRevision: number;

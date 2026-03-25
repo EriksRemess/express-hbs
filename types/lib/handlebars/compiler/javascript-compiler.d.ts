@@ -57,7 +57,7 @@ declare class JavaScriptCompiler {
     lookupData(depth: any, parts: any, strict: any): void;
     resolvePath(type: any, parts: any, i: any, falsy: any, strict: any): void;
     resolvePossibleLambda(): void;
-    pushStringParam(string: any, type: any): void;
+    pushStringParam(string: any, type: any, idType: any, idName: any, idChild: any): void;
     emptyHash(omitEmpty: any): void;
     pushHash(): void;
     hash: any;
@@ -147,6 +147,7 @@ declare class JavaScriptCompiler {
                 toString(): string;
             };
             data: string;
+            partialName: string;
             blockParams: string;
         } | (string | {
             name: string;
@@ -193,6 +194,7 @@ declare class JavaScriptCompiler {
                 toString(): string;
             };
             data: string;
+            partialName: string;
             blockParams: string;
         })[];
         name: any[];
@@ -243,6 +245,7 @@ declare class JavaScriptCompiler {
             toString(): string;
         };
         data: string;
+        partialName: string;
         blockParams: string;
     };
     setupHelperArgs(helper: any, paramSize: any, params: any, useRegister: any): "" | {
@@ -290,6 +293,7 @@ declare class JavaScriptCompiler {
             toString(): string;
         };
         data: string;
+        partialName: string;
         blockParams: string;
     } | (string | {
         name: string;
@@ -336,6 +340,7 @@ declare class JavaScriptCompiler {
             toString(): string;
         };
         data: string;
+        partialName: string;
         blockParams: string;
     })[];
 }

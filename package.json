@@ -37,7 +37,7 @@
     "test": "node --test test/*.js",
     "posttest": "npm run lint",
     "types:clean": "rm -rf types",
-    "types:build": "tsc -p tsconfig.types.json",
+    "types:build": "tsc -p tsconfig.types.json && mkdir -p types/lib && cp lib/handlebars.d.ts types/lib/handlebars.d.ts",
     "types:rebuild": "npm run types:clean && npm run types:build",
     "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' --test-coverage-include='example/**/*.js' test/*.js",
     "bench": "npm --prefix benchmark run compare",
@@ -61,10 +61,10 @@
   "devDependencies": {
     "@types/node": "^25.5.0",
     "cookie-parser": "1.4.7",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "express": "github:eriksremess/express#eriks-esm",
     "globals": "^17.4.0",
     "i18n": "0.15.3",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
