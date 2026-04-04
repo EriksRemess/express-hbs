@@ -44,7 +44,7 @@ const createApp = (env) => createExampleApp( hbs.create(), env );
 
 describe('express-hbs', () => {
   describe('cache', () => {
-    it('should not cache layout in `development`', async () => {
+    it('should avoid rereading unchanged layouts in `development`', async () => {
       const readCounts = {};
       const app = createApp('development');
 
@@ -55,7 +55,7 @@ describe('express-hbs', () => {
       });
 
       const filename = path.resolve(__dirname, '../example/views/layout/default.hbs');
-      assert.equal(readCounts[filename], 2);
+      assert.equal(readCounts[filename], 1);
     });
 
     it('should cache layout in `production` reading file once', async () => {
@@ -72,7 +72,7 @@ describe('express-hbs', () => {
       assert.equal(readCounts[filename], 1);
     });
 
-    it('should not cache partials in `development`', async () => {
+    it('should avoid rereading unchanged partials in `development`', async () => {
       const readCounts = {};
       const app = createApp('development');
 
@@ -84,7 +84,7 @@ describe('express-hbs', () => {
       });
 
       const filename = path.resolve(__dirname, '../example/views/partials/sub/comment.hbs');
-      assert.equal(readCounts[filename], 2);
+      assert.equal(readCounts[filename], 1);
     });
 
     it('should cache partials in `production`', async () => {

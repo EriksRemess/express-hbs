@@ -27,20 +27,23 @@ const scenarioDefaults = {
   baseline: {
     templateFile: baselineTemplateFile,
     verifyText: 'BENCHMARK FOOTER',
-    defaultItems: 30
+    defaultItems: 30,
+    defaultProfile: 'default'
   },
   async: {
     templateFile: asyncTemplateFile,
     verifyText: 'ASYNC BENCHMARK',
-    defaultItems: 40
+    defaultItems: 40,
+    defaultProfile: 'smoke'
   }
 };
 const selectedScenarioName = scenarioDefaults[scenario] ? scenario : 'baseline';
 const selectedScenario = scenarioDefaults[selectedScenarioName];
 
-const profile = process.env.BENCH_PROFILE ?? 'default';
+const profile = process.env.BENCH_PROFILE ?? selectedScenario.defaultProfile;
 const profileDefaults = {
   default: { iterations: 1000, warmup: 120, rounds: 9 },
+  smoke: { iterations: 50, warmup: 10, rounds: 1 },
   quick: { iterations: 250, warmup: 40, rounds: 3 },
   stable: { iterations: 1500, warmup: 180, rounds: 9 }
 };

@@ -175,6 +175,21 @@ describe('lib helpers', () => {
       assert.deepEqual(templateOptions, {});
     });
 
+    it('uses the direct render fast path when no template options are configured', () => {
+      const hb = hbs.create();
+      const template = function(localsArg) {
+        return {
+          localsArg,
+          argCount: arguments.length
+        };
+      };
+      template.__filename = 'x.hbs';
+
+      const result = hb._renderTemplate(template, { name: 'ok' });
+      assert.equal(result.localsArg.name, 'ok');
+      assert.equal(result.argCount, 1);
+    });
+
     it('skips unsafe keys when cloning render locals', () => {
       const hb = hbs.create();
       const locals = {
@@ -223,6 +238,24 @@ describe('lib helpers', () => {
       assert.throws(() => hb.layoutPath('/tmp/a.hbs', {}, '/tmp'), /layout must be a non-empty string/);
       assert.equal(hb._toErrorFilename(undefined, '/tmp'), undefined);
       hb._ensureInRestrictLayoutsTo('/tmp/a.hbs');
+    });
+
+    it('memoizes layoutPath results for repeated inputs', () => {
+      const hb = hbs.create();
+      hb.layoutsDir = '/tmp/layouts';
+
+      assert.equal(hb.layoutPath('/tmp/a.hbs', 'layout', '/tmp/views'), '/tmp/layouts/layout');
+      assert.equal(hb.layoutPath('/tmp/a.hbs', 'layout', '/tmp/views'), '/tmp/layouts/layout');
+      assert.equal(hb.layoutPathCache.size, 1);
+    });
+
+    it('memoizes filename dirnames for relative layout resolution', () => {
+      const hb = hbs.create();
+
+      assert.equal(hb.layoutPath('/tmp/views/sub/template.hbs', './layout', '/tmp/views'), '/tmp/views/sub/layout');
+      assert.equal(hb.declaredLayoutFile('{{!< ./layout}}', '/tmp/views/sub/template.hbs'), '/tmp/views/sub/layout');
+      assert.equal(hb.filenameDirCache.get('/tmp/views/sub/template.hbs'), '/tmp/views/sub');
+      assert.equal(hb.filenameDirCache.size, 1);
     });
 
     it('uses null-prototype block caches for helper-controlled names', () => {
@@ -296,6 +329,71 @@ describe('lib helpers', () => {
       }
     });
 
+    it('cacheLayout skips repeated realpath checks when the layout is cached', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-realpath-'));
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+      const originalRealpath = fs.realpath;
+      let realpathCalls = 0;
+
+      await fs.writeFile(layoutFile, 'layout', 'utf8');
+
+      fs.realpath = async (...args) => {
+        realpathCalls += 1;
+        return originalRealpath(...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        await hb.cacheLayout(path.join(tempRoot, 'layout'), true);
+        await hb.cacheLayout(path.join(tempRoot, 'layout'), true);
+
+        assert.equal(realpathCalls, 2);
+      } finally {
+        fs.realpath = originalRealpath;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('cacheLayout reuses the resolved restrictLayoutsTo root across layout files', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-root-realpath-'));
+      const firstLayoutFile = path.join(tempRoot, 'first.hbs');
+      const secondLayoutFile = path.join(tempRoot, 'second.hbs');
+      const originalRealpath = fs.realpath;
+      const rootPath = path.resolve(tempRoot);
+      let rootRealpathCalls = 0;
+
+      await fs.writeFile(firstLayoutFile, 'first', 'utf8');
+      await fs.writeFile(secondLayoutFile, 'second', 'utf8');
+
+      fs.realpath = async (...args) => {
+        if (path.resolve(args[0]) === rootPath) {
+          rootRealpathCalls += 1;
+        }
+        return originalRealpath(...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        await hb.cacheLayout(path.join(tempRoot, 'first'), false);
+        await hb.cacheLayout(path.join(tempRoot, 'second'), false);
+
+        assert.equal(rootRealpathCalls, 1);
+      } finally {
+        fs.realpath = originalRealpath;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     it('cacheLayout callback returns success and errors', async () => {
       const hb = hbs.create();
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-cb-'));
@@ -328,6 +426,138 @@ describe('lib helpers', () => {
           });
         });
       } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('reuses cached declared layout parsing for cached templates', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-declared-layout-'));
+      const templateFile = path.join(tempRoot, 'index.hbs');
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+      const originalDeclaredLayoutFile = hb.declaredLayoutFile;
+      let declaredLayoutCalls = 0;
+
+      await fs.writeFile(templateFile, '{{!< ./layout}}\nbody', 'utf8');
+      await fs.writeFile(layoutFile, '<layout>{{{body}}}</layout>', 'utf8');
+
+      hb.declaredLayoutFile = function(...args) {
+        if (args[1] === templateFile) {
+          declaredLayoutCalls += 1;
+        }
+        return originalDeclaredLayoutFile.apply(this, args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: true, settings: { views: tempRoot } }),
+          '<layout>body</layout>'
+        );
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: true, settings: { views: tempRoot } }),
+          '<layout>body</layout>'
+        );
+
+        assert.equal(declaredLayoutCalls, 1);
+      } finally {
+        hb.declaredLayoutFile = originalDeclaredLayoutFile;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('rereads only changed layouts for uncached renders', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-refresh-'));
+      const templateFile = path.join(tempRoot, 'index.hbs');
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+      const originalReadFile = fs.readFile;
+      const readCounts = new Map();
+
+      await fs.writeFile(templateFile, '{{!< ./layout}}\nbody', 'utf8');
+      await fs.writeFile(layoutFile, '<layout>v1 {{{body}}}</layout>', 'utf8');
+
+      fs.readFile = async function(filename, ...args) {
+        const resolved = path.resolve(filename);
+        readCounts.set(resolved, (readCounts.get(resolved) ?? 0) + 1);
+        return originalReadFile.call(this, filename, ...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          '<layout>v1 body</layout>'
+        );
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          '<layout>v1 body</layout>'
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await fs.writeFile(layoutFile, '<layout>v2 {{{body}}}</layout>', 'utf8');
+
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          '<layout>v2 body</layout>'
+        );
+
+        assert.equal(readCounts.get(path.resolve(layoutFile)), 2);
+      } finally {
+        fs.readFile = originalReadFile;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('rereads only changed templates for uncached renders', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-template-refresh-'));
+      const templateFile = path.join(tempRoot, 'index.hbs');
+      const originalReadFile = fs.readFile;
+      const readCounts = new Map();
+
+      await fs.writeFile(templateFile, 'v1', 'utf8');
+
+      fs.readFile = async function(filename, ...args) {
+        const resolved = path.resolve(filename);
+        readCounts.set(resolved, (readCounts.get(resolved) ?? 0) + 1);
+        return originalReadFile.call(this, filename, ...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          'v1'
+        );
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          'v1'
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await fs.writeFile(templateFile, 'v2', 'utf8');
+
+        assert.equal(
+          await hb._renderFile(templateFile, null, { cache: false, settings: { views: tempRoot } }),
+          'v2'
+        );
+
+        assert.equal(readCounts.get(path.resolve(templateFile)), 2);
+      } finally {
+        fs.readFile = originalReadFile;
         await fs.rm(tempRoot, { recursive: true, force: true });
       }
     });
@@ -375,13 +605,116 @@ describe('lib helpers', () => {
 
     it('invalidates partial manifest caches', () => {
       const hb = hbs.create();
+      hb.isPartialCachingComplete = true;
       hb.partialsManifest = [];
       hb.partialsManifestKey = 'x';
       hb.partialsSourceCache = new Map();
+      hb.partialsMetadataCache = new Map();
       hb.invalidatePartialsManifest();
+      assert.equal(hb.isPartialCachingComplete, false);
       assert.equal(hb.partialsManifest, null);
       assert.equal(hb.partialsManifestKey, null);
       assert.equal(hb.partialsSourceCache, null);
+      assert.equal(hb.partialsMetadataCache, null);
+    });
+
+    it('defers partial compilation until a partial is actually rendered', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-lazy-partials-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      const viewsDir = path.join(tempRoot, 'views');
+      let partialCompileCount = 0;
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(path.join(partialsDir, 'used.hbs'), 'used', 'utf8');
+      await fs.writeFile(path.join(partialsDir, 'unused.hbs'), 'unused', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          partialsDir,
+          viewsDir,
+          onCompile(instance, source, filename) {
+            if (filename?.startsWith(partialsDir)) {
+              partialCompileCount += 1;
+            }
+
+            return instance.handlebars.compile(source);
+          }
+        });
+
+        await hb.cachePartials();
+        assert.equal(partialCompileCount, 0);
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: true, settings: { views: viewsDir } }),
+          'used '
+        );
+        assert.equal(partialCompileCount, 1);
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: true, settings: { views: viewsDir } }),
+          'used '
+        );
+        assert.equal(partialCompileCount, 1);
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('rereads only changed partial sources for uncached renders', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-refresh-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      const viewsDir = path.join(tempRoot, 'views');
+      const usedPartialFile = path.join(partialsDir, 'used.hbs');
+      const unusedPartialFile = path.join(partialsDir, 'unused.hbs');
+      const originalReadFile = fs.readFile;
+      const readCounts = new Map();
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(usedPartialFile, 'used-v1', 'utf8');
+      await fs.writeFile(unusedPartialFile, 'unused-v1', 'utf8');
+
+      fs.readFile = async function(filename, ...args) {
+        const resolved = path.resolve(filename);
+        readCounts.set(resolved, (readCounts.get(resolved) ?? 0) + 1);
+        return originalReadFile.call(this, filename, ...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          partialsDir,
+          viewsDir
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
+          'used-v1 '
+        );
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
+          'used-v1 '
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await fs.writeFile(usedPartialFile, 'used-v2', 'utf8');
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
+          'used-v2 '
+        );
+
+        assert.equal(readCounts.get(path.resolve(usedPartialFile)), 2);
+        assert.equal(readCounts.get(path.resolve(unusedPartialFile)), 1);
+      } finally {
+        fs.readFile = originalReadFile;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
 
     it('accepts external handlebars in express options', () => {
@@ -468,6 +801,74 @@ describe('lib helpers', () => {
           resolve();
         });
       });
+    });
+
+    it('does not load the default layout when render options disable layouts', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-default-layout-skip-'));
+      const defaultLayoutFile = path.join(tempRoot, 'default.hbs');
+      const originalLoadDefaultLayout = hb._loadDefaultLayout;
+      let loadDefaultLayoutCalls = 0;
+
+      await fs.writeFile(defaultLayoutFile, '<layout>{{{body}}}</layout>', 'utf8');
+
+      hb._loadDefaultLayout = async function(...args) {
+        loadDefaultLayoutCalls += 1;
+        return originalLoadDefaultLayout.apply(this, args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          defaultLayout: path.join(tempRoot, 'default'),
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(tempRoot, 'inline.hbs'), 'body', {
+            cache: true,
+            layout: null,
+            settings: { views: tempRoot }
+          }),
+          'body'
+        );
+        assert.equal(loadDefaultLayoutCalls, 0);
+      } finally {
+        hb._loadDefaultLayout = originalLoadDefaultLayout;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('does not resolve declarative layouts when render options disable layouts', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-declared-layout-skip-'));
+      const originalCacheLayout = hb._cacheLayout;
+      let cacheLayoutCalls = 0;
+
+      hb._cacheLayout = async function(...args) {
+        cacheLayoutCalls += 1;
+        return originalCacheLayout.apply(this, args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(tempRoot, 'inline.hbs'), '{{!< ./layout}}\nbody', {
+            cache: true,
+            layout: false,
+            settings: { views: tempRoot }
+          }),
+          'body'
+        );
+        assert.equal(cacheLayoutCalls, 0);
+      } finally {
+        hb._cacheLayout = originalCacheLayout;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
 
     it('cachePartials callback returns success result', async () => {
