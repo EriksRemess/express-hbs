@@ -1,20 +1,61 @@
 export default JavaScriptCompiler;
+/**
+ * Compiles the Handlebars opcode stream into an executable template function.
+ */
 declare class JavaScriptCompiler {
-    nameLookup(parent: any, name: any): any[];
-    depthedLookup(name: any): any[];
-    appendToBuffer(source: any, location: any, explicit: any): any;
+    /**
+     * Resolves a property access expression for generated code.
+     *
+     * @param {string | import('#handlebars/compiler/code-gen').default} parent
+     * @param {string} name
+     * @returns {Array<string | import('#handlebars/compiler/code-gen').default>}
+     */
+    nameLookup(parent: string | import("#handlebars/compiler/code-gen").default, name: string): Array<string | import("#handlebars/compiler/code-gen").default>;
+    /**
+     * Emits a lookup that walks up the depth stack at runtime.
+     *
+     * @param {string} name
+     * @returns {Array<string>}
+     */
+    depthedLookup(name: string): Array<string>;
+    /**
+     * Appends generated source to the output buffer or returns the source directly for simple templates.
+     *
+     * @param {string | Array<unknown> | import('#handlebars/compiler/code-gen').default} source
+     * @param {Record<string, unknown>=} location
+     * @param {boolean=} explicit
+     * @returns {Array<unknown> | import('#handlebars/compiler/code-gen').default}
+     */
+    appendToBuffer(source: string | Array<unknown> | import("#handlebars/compiler/code-gen").default, location?: Record<string, unknown> | undefined, explicit?: boolean | undefined): Array<unknown> | import("#handlebars/compiler/code-gen").default;
     initializeBuffer(): string;
-    internalNameLookup(parent: any, name: any): any[];
+    /**
+     * Emits a guarded property lookup through the runtime `lookupProperty` helper.
+     *
+     * @param {string | import('#handlebars/compiler/code-gen').default} parent
+     * @param {string} name
+     * @returns {Array<string | import('#handlebars/compiler/code-gen').default>}
+     */
+    internalNameLookup(parent: string | import("#handlebars/compiler/code-gen").default, name: string): Array<string | import("#handlebars/compiler/code-gen").default>;
     lookupPropertyFunctionIsUsed: boolean;
-    compile(environment: any, options: any, context: any, asObject: any): any;
-    environment: any;
-    options: any;
-    stringParams: any;
-    trackIds: any;
+    /**
+     * Compiles a parsed template environment into a template function or precompiled spec object.
+     *
+     * @param {Record<string, unknown>} environment
+     * @param {Record<string, unknown>} options
+     * @param {Record<string, unknown>=} context
+     * @param {boolean=} asObject
+     * @returns {unknown}
+     */
+    compile(environment: Record<string, unknown>, options: Record<string, unknown>, context?: Record<string, unknown> | undefined, asObject?: boolean | undefined): unknown;
+    environment: Record<string, unknown>;
+    options: Record<string, unknown>;
+    stringParams: unknown;
+    trackIds: unknown;
     precompile: boolean;
-    name: any;
+    forceBuffer: boolean;
+    name: unknown;
     isChild: boolean;
-    context: any;
+    context: Record<string, unknown>;
     stackSlot: number;
     stackVars: any[];
     aliases: {};
@@ -29,19 +70,31 @@ declare class JavaScriptCompiler {
     useBlockParams: any;
     useDecorators: boolean;
     decorators: any;
+    /**
+     * Resets per-compilation state shared by opcode emitters.
+     */
     preamble(): void;
     lastContext: any;
     source: CodeGen;
-    createFunctionContext(asObject: any): any;
-    mergeSource(varDeclarations: any): {
-        src: string;
-        add(chunks: any): void;
-        prepend(chunks: any): void;
-        toStringWithSourceMap(): {
-            code: string;
-        };
-        toString(): string;
-    };
+    /**
+     * Builds the final function body for the current program.
+     *
+     * @param {boolean} asObject
+     * @returns {Function | import('#handlebars/compiler/code-gen').default}
+     */
+    createFunctionContext(asObject: boolean): Function | import("#handlebars/compiler/code-gen").default;
+    /**
+     * Folds adjacent buffer appends into the smallest source representation available.
+     *
+     * @param {string} varDeclarations
+     * @returns {import('#handlebars/compiler/code-gen').default}
+     */
+    mergeSource(varDeclarations: string): import("#handlebars/compiler/code-gen").default;
+    /**
+     * Generates the fallback `lookupProperty` helper declaration used by compiled templates.
+     *
+     * @returns {string}
+     */
     lookupPropertyFunctionVarDeclaration(): string;
     blockValue(name: any): void;
     ambiguousBlockValue(): void;
@@ -67,16 +120,43 @@ declare class JavaScriptCompiler {
     pushProgram(guid: any): void;
     registerDecorator(paramSize: any, name: any): void;
     invokeHelper(paramSize: any, name: any, isSimple: any): void;
-    itemsSeparatedBy(items: any, separator: any): any[];
+    /**
+     * Joins emitted code fragments with a separator without flattening the original items first.
+     *
+     * @param {unknown[]} items
+     * @param {string} separator
+     * @returns {unknown[]}
+     */
+    itemsSeparatedBy(items: unknown[], separator: string): unknown[];
     invokeKnownHelper(paramSize: any, name: any): void;
     invokeAmbiguous(name: any, helperCall: any): void;
-    lastHelper: any[];
+    lastHelper: (string | CodeGen)[];
     invokePartial(isDynamic: any, name: any, indent: any): void;
     assignToHash(key: any): void;
     pushId(type: any, name: any, child: any): void;
-    compileChildren(environment: any, options: any): void;
-    matchExistingProgram(child: any): any;
-    programExpression(guid: any): string;
+    /**
+     * Compiles nested block programs and reuses previously compiled equivalents when possible.
+     *
+     * @param {Record<string, unknown>} environment
+     * @param {Record<string, unknown>} options
+     */
+    compileChildren(environment: Record<string, unknown>, options: Record<string, unknown>): void;
+    /**
+     * Returns a previously compiled child program with an equivalent environment, if present.
+     *
+     * @param {{ equals(environment: unknown): boolean }} child
+     * @returns {unknown}
+     */
+    matchExistingProgram(child: {
+        equals(environment: unknown): boolean;
+    }): unknown;
+    /**
+     * Builds the runtime expression that loads a compiled child program.
+     *
+     * @param {number} guid
+     * @returns {string}
+     */
+    programExpression(guid: number): string;
     useRegister(name: any): void;
     push(expr: any): any;
     pushStackLiteral(item: any): void;
@@ -92,8 +172,8 @@ declare class JavaScriptCompiler {
     quotedString(str: any): string;
     objectLiteral(obj: any): {
         src: string;
-        add(chunks: any): void;
-        prepend(chunks: any): void;
+        add(chunks: string | string[] | /*elided*/ any): void;
+        prepend(chunks: string | string[] | /*elided*/ any): void;
         toStringWithSourceMap(): {
             code: string;
         };
@@ -112,8 +192,8 @@ declare class JavaScriptCompiler {
             inverse: any;
             args: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -121,8 +201,8 @@ declare class JavaScriptCompiler {
             };
             ids: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -130,8 +210,8 @@ declare class JavaScriptCompiler {
             };
             types: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -139,8 +219,8 @@ declare class JavaScriptCompiler {
             };
             contexts: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -159,8 +239,8 @@ declare class JavaScriptCompiler {
             inverse: any;
             args: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -168,8 +248,8 @@ declare class JavaScriptCompiler {
             };
             ids: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -177,8 +257,8 @@ declare class JavaScriptCompiler {
             };
             types: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -186,8 +266,8 @@ declare class JavaScriptCompiler {
             };
             contexts: {
                 src: string;
-                add(chunks: any): void;
-                prepend(chunks: any): void;
+                add(chunks: string | string[] | /*elided*/ any): void;
+                prepend(chunks: string | string[] | /*elided*/ any): void;
                 toStringWithSourceMap(): {
                     code: string;
                 };
@@ -197,7 +277,7 @@ declare class JavaScriptCompiler {
             partialName: string;
             blockParams: string;
         })[];
-        name: any[];
+        name: (string | CodeGen)[];
         callParams: any[];
     };
     setupParams(helper: any, paramSize: any, params: any): {
@@ -210,8 +290,8 @@ declare class JavaScriptCompiler {
         inverse: any;
         args: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -219,8 +299,8 @@ declare class JavaScriptCompiler {
         };
         ids: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -228,8 +308,8 @@ declare class JavaScriptCompiler {
         };
         types: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -237,8 +317,8 @@ declare class JavaScriptCompiler {
         };
         contexts: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -258,8 +338,8 @@ declare class JavaScriptCompiler {
         inverse: any;
         args: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -267,8 +347,8 @@ declare class JavaScriptCompiler {
         };
         ids: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -276,8 +356,8 @@ declare class JavaScriptCompiler {
         };
         types: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -285,8 +365,8 @@ declare class JavaScriptCompiler {
         };
         contexts: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -305,8 +385,8 @@ declare class JavaScriptCompiler {
         inverse: any;
         args: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -314,8 +394,8 @@ declare class JavaScriptCompiler {
         };
         ids: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -323,8 +403,8 @@ declare class JavaScriptCompiler {
         };
         types: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };
@@ -332,8 +412,8 @@ declare class JavaScriptCompiler {
         };
         contexts: {
             src: string;
-            add(chunks: any): void;
-            prepend(chunks: any): void;
+            add(chunks: string | string[] | /*elided*/ any): void;
+            prepend(chunks: string | string[] | /*elided*/ any): void;
             toStringWithSourceMap(): {
                 code: string;
             };

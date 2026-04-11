@@ -15,5 +15,6 @@ export function resolve(cache: ResolverCache, fn: (context: unknown, cb: (value:
  * @returns {Promise<Record<string, unknown>> | void}
  */
 export function done(cache: ResolverCache, callback?: (err: Error | null, resolvedCache?: Record<string, unknown>) => void): Promise<Record<string, unknown>> | void;
+export const resolverPendingEntriesKey: unique symbol;
 export function hasResolvers(text: unknown): boolean;
 export type ResolverCache = Map<string, Promise<unknown>> | Record<string, Promise<unknown>>;

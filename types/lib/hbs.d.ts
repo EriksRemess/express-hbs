@@ -28,6 +28,7 @@ export type EngineOptions = AnyObject & {
  * Handlebars view engine wrapper compatible with Express.
  */
 declare class ExpressHbs {
+    _defaultHandlebars: import("./handlebars.d.ts").LocalHandlebars;
     /** @type {LocalHandlebars} */
     handlebars: LocalHandlebars;
     SafeString: new (value: string) => {
@@ -49,12 +50,57 @@ declare class ExpressHbs {
     partialsManifest: any[];
     partialsManifestKey: any;
     partialsSourceCache: any;
+    partialsMetadataCache: any;
+    uncachedLayoutCache: Map<any, any>;
+    uncachedTemplateCache: Map<any, any>;
     partialsDir: any;
     layoutsDir: any;
     restrictLayoutsTo: any;
+    restrictLayoutsRootRealpath: any;
+    layoutRestrictionRootRealpaths: Map<any, any>;
     viewsDirOpt: any;
+    normalizedViewsDirCacheInput: any;
+    normalizedViewsDirCacheValue: string | false | string[];
+    layoutPathCache: Map<any, any>;
+    filenameDirCache: Map<any, any>;
     /** @type {CompileHook | undefined} */
     onCompile: CompileHook | undefined;
+    _engineHelperNames: Set<any>;
+    _engineHelpersHandlebars: import("./handlebars.d.ts").LocalHandlebars;
+    /**
+     * Syncs convenience aliases with the active Handlebars instance.
+     *
+     * @returns {void}
+     */
+    _syncHandlebarsAliases(): void;
+    /**
+     * Normalizes and caches the active views directory option.
+     *
+     * @param {string | string[] | undefined} viewsDir
+     * @returns {string | string[] | undefined}
+     */
+    _normalizeViewsDir(viewsDir: string | string[] | undefined): string | string[] | undefined;
+    /**
+     * Memoizes dirname lookups for template files.
+     *
+     * @param {string} filename
+     * @returns {string}
+     */
+    _dirname(filename: string): string;
+    /**
+     * Removes engine-managed helpers from the previously active Handlebars instance.
+     *
+     * @returns {void}
+     */
+    _clearEngineHelpers(): void;
+    /**
+     * Registers an engine-managed helper on the active Handlebars instance.
+     *
+     * @param {string} name
+     * @param {Function} fn
+     * @returns {void}
+     */
+    _registerEngineHelper(name: string, fn: Function): void;
     /**
      * Stores content for a named block.
      *
@@ -74,6 +120,13 @@ declare class ExpressHbs {
      */
     layoutPath(filename: string, layout: string, viewsDir: string | string[]): string | undefined;
     /**
+     * Extracts a declared layout directive from template source.
+     *
+     * @param {string} str
+     * @returns {string | undefined}
+     */
+    declaredLayout(str: string): string | undefined;
+    /**
      * Finds and resolves a declared layout from template source.
      *
      * @param {string} str
@@ -82,6 +135,15 @@ declare class ExpressHbs {
      */
     declaredLayoutFile(str: string, filename: string): string | undefined;
     /**
+     * Resolves the implicit safe root for declarative layouts.
+     *
+     * @param {string} filename
+     * @param {string | string[] | undefined} viewsDir
+     * @param {string} layout
+     * @returns {string | undefined}
+     */
+    _getImplicitDeclaredLayoutRestrictionRoot(filename: string, viewsDir: string | string[] | undefined, layout: string): string | undefined;
+    /**
      * Builds a human-friendly template filename for error messages.
      *
      * @param {string | undefined} filename
@@ -89,6 +151,23 @@ declare class ExpressHbs {
      * @returns {string | undefined}
      */
     _toErrorFilename(filename: string | undefined, viewsDir: string | string[] | undefined): string | undefined;
+    /**
+     * Resolves the implicit safe root for programmatic `options.layout`.
+     *
+     * @param {string} filename
+     * @param {string | string[]} viewsDir
+     * @param {string} layout
+     * @returns {string | undefined}
+     */
+    _getImplicitLayoutRestrictionRoot(filename: string, viewsDir: string | string[], layout: string): string | undefined;
+    /**
+     * Validates that a layout path is inside an allowed root.
+     *
+     * @param {string} layoutFile
+     * @param {string | undefined} allowedRoot
+     * @returns {void}
+     */
+    _ensureLayoutWithinRoot(layoutFile: string, allowedRoot: string | undefined): void;
     /**
      * Validates that a layout path is inside `restrictLayoutsTo`, when configured.
      *
@@ -104,7 +183,7 @@ declare class ExpressHbs {
      * @param {string | string[]} viewsDir
      * @returns {Promise<Function[]>}
      */
-    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[]): Promise<Function[]>;
+    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: any): Promise<Function[]>;
     /**
      * Callback/Promise wrapper for layout caching.
      *
@@ -186,6 +265,16 @@ declare class ExpressHbs {
      */
     registerPartial(name: string, source: string, filename?: string, viewsDir?: string | string[]): void;
     /**
+     * Registers a partial that compiles itself on first use.
+     *
+     * @param {string} name
+     * @param {string} source
+     * @param {string} filename
+     * @param {string | string[]} [viewsDir]
+     * @returns {void}
+     */
+    _registerLazyPartial(name: string, source: string, filename: string, viewsDir?: string | string[]): void;
+    /**
      * Compiles a template source string.
      *
      * @param {string} source
@@ -254,55 +343,78 @@ declare class ExpressHbs {
      */
     _renderWithLayouts(template: Function, locals: AnyObject, layoutTemplates: Function[] | null): string;
     /**
+     * Returns uncached layout info while avoiding rereads for unchanged files.
+     *
+     * @param {string} filename
+     * @param {string | string[]} viewsDir
+     * @returns {Promise<{ compiled: Function, parentLayoutFile: string | undefined }>}
+     */
+    _getUncachedLayoutInfo(filename: string, viewsDir: string | string[]): Promise<{
+        compiled: Function;
+        parentLayoutFile: string | undefined;
+    }>;
+    /**
+     * Returns uncached template info while avoiding rereads for unchanged files.
+     *
+     * @param {string} filename
+     * @param {string | string[]} viewsDir
+     * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
+     */
+    _getUncachedTemplateInfo(filename: string, viewsDir: string | string[]): Promise<{
+        type: "template";
+        source: string;
+        template: Function;
+        declaredLayout: string | undefined;
+        declaredLayoutFile: string | undefined;
+    }>;
+    /**
      * Returns compiled template info, optionally reading from cache.
      *
      * @param {string} filename
      * @param {string | null} source
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
-     * @returns {Promise<{ type: 'template', source: string, template: Function }>}
+     * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
      */
     _getSourceTemplate(filename: string, source: string | null, useCache: boolean, viewsDir: string | string[]): Promise<{
         type: "template";
         source: string;
         template: Function;
+        declaredLayout: string | undefined;
+        declaredLayoutFile: string | undefined;
     }>;
     /**
      * Resolves which layout templates should be applied to render request.
      *
      * @param {string} filename
-     * @param {string} templateSource
+     * @param {{ declaredLayout?: string, declaredLayoutFile?: string }} templateInfo
      * @param {AnyObject} options
      * @param {string | string[]} viewsDir
      * @returns {Promise<Function[] | null>}
      */
-    _resolveLayoutTemplates(filename: string, templateSource: string, options: AnyObject, viewsDir: string | string[]): Promise<Function[] | null>;
+    _resolveLayoutTemplates(filename: string, templateInfo: {
+        declaredLayout?: string;
+        declaredLayoutFile?: string;
+    }, options: AnyObject, viewsDir: string | string[]): Promise<Function[] | null>;
     /**
-     * Builds a replacement table for async placeholder substitution.
+     * Updates replacement entries for a subset of async placeholders.
      *
      * @param {Record<string, unknown>} values
-     * @param {string[]} keys
-     * @returns {{ id: string, escapedId: string, value: unknown, escapedValue: string }[]}
+     * @param {Record<string, unknown>} replacements
+     * @param {string[]} changedKeys
+     * @param {Record<string, string>} escapedIds
+     * @returns {void}
      */
-    _buildAsyncReplacements(values: Record<string, unknown>, keys: string[]): {
-        id: string;
-        escapedId: string;
-        value: unknown;
-        escapedValue: string;
-    }[];
+    _updateAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, changedKeys: string[], escapedIds: Record<string, string>): void;
     /**
      * Replaces async placeholder ids in a string.
      *
      * @param {unknown} text
-     * @param {{ id: string, escapedId: string, value: unknown, escapedValue: string }[]} replacements
+     * @param {Record<string, unknown>} replacements
+     * @param {number} replacementCount
      * @returns {unknown}
      */
-    _replaceValue(text: unknown, replacements: {
-        id: string;
-        escapedId: string;
-        value: unknown;
-        escapedValue: string;
-    }[]): unknown;
+    _replaceValue(text: unknown, replacements: Record<string, unknown>, replacementCount: number): unknown;
     /**
      * Resolves pending async helper values.
      *

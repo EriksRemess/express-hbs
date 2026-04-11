@@ -1,28 +1,107 @@
+/**
+ * Small utility that assembles generated JavaScript fragments.
+ */
 export default class CodeGen {
-    constructor(srcFile: any);
-    srcFile: any;
+    /**
+     * @param {string} srcFile
+     */
+    constructor(srcFile: string);
+    srcFile: string;
     source: any[];
+    /**
+     * @returns {boolean}
+     */
     isEmpty(): boolean;
-    prepend(source: any, loc: any): void;
-    push(source: any, loc: any): void;
+    /**
+     * @param {unknown} source
+     * @param {object} loc
+     * @returns {void}
+     */
+    prepend(source: unknown, loc: object): void;
+    /**
+     * @param {unknown} source
+     * @param {object} loc
+     * @returns {void}
+     */
+    push(source: unknown, loc: object): void;
+    /**
+     * @returns {SourceNode}
+     */
     merge(): SourceNode;
-    each(iter: any): void;
+    /**
+     * @param {(line: SourceNode) => void} iter
+     * @returns {void}
+     */
+    each(iter: (line: SourceNode) => void): void;
+    /**
+     * @returns {SourceNode}
+     */
     empty(): SourceNode;
-    wrap(chunk: any, loc?: any): SourceNode;
-    functionCall(fn: any, type: any, params: any): SourceNode;
-    quotedString(str: any): string;
-    objectLiteral(obj: any): SourceNode;
-    generateList(entries: any): SourceNode;
-    generateArray(entries: any): SourceNode;
+    /**
+     * @param {unknown} chunk
+     * @param {object} loc
+     * @returns {SourceNode}
+     */
+    wrap(chunk: unknown, loc?: object): SourceNode;
+    /**
+     * @param {string} fn
+     * @param {string} type
+     * @param {unknown[]} params
+     * @returns {SourceNode}
+     */
+    functionCall(fn: string, type: string, params: unknown[]): SourceNode;
+    /**
+     * @param {unknown} str
+     * @returns {string}
+     */
+    quotedString(str: unknown): string;
+    /**
+     * @param {Record<string, unknown>} obj
+     * @returns {SourceNode}
+     */
+    objectLiteral(obj: Record<string, unknown>): SourceNode;
+    /**
+     * @param {unknown[]} entries
+     * @returns {SourceNode}
+     */
+    generateList(entries: unknown[]): SourceNode;
+    /**
+     * @param {unknown[]} entries
+     * @returns {SourceNode}
+     */
+    generateArray(entries: unknown[]): SourceNode;
 }
+/**
+ * Minimal source node used by the local code generator.
+ */
 declare class SourceNode {
-    constructor(line: any, column: any, srcFile: any, chunks: any);
+    /**
+     * @param {number} line
+     * @param {number} column
+     * @param {string} srcFile
+     * @param {string | string[] | SourceNode} chunks
+     */
+    constructor(line: number, column: number, srcFile: string, chunks: string | string[] | SourceNode);
     src: string;
-    add(chunks: any): void;
-    prepend(chunks: any): void;
+    /**
+     * @param {string | string[] | SourceNode} chunks
+     * @returns {void}
+     */
+    add(chunks: string | string[] | SourceNode): void;
+    /**
+     * @param {string | string[] | SourceNode} chunks
+     * @returns {void}
+     */
+    prepend(chunks: string | string[] | SourceNode): void;
+    /**
+     * @returns {{ code: string }}
+     */
     toStringWithSourceMap(): {
         code: string;
     };
+    /**
+     * @returns {string}
+     */
     toString(): string;
 }
 export {};
