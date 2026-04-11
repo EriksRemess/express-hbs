@@ -444,6 +444,67 @@ describe('issue-270', () => {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('should reject declarative layouts that escape the implicit views root', async () => {
+    const hb = hbs.create();
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'express-hbs-issue-270-declared-'));
+
+    try {
+      const tempViewsDir = path.join(tempRoot, 'views');
+      const nestedViewsDir = path.join(tempViewsDir, 'nested');
+      const outsideDir = path.join(tempRoot, 'outside');
+      const indexPath = path.join(nestedViewsDir, 'index.hbs');
+      const outsideLayoutPath = path.join(outsideDir, 'default.hbs');
+
+      await fs.mkdir(nestedViewsDir, { recursive: true });
+      await fs.mkdir(outsideDir, { recursive: true });
+      await fs.writeFile(indexPath, '{{!< ../../outside/default}}Hello');
+      await fs.writeFile(outsideLayoutPath, '<outside>{{{body}}}</outside>');
+
+      const render = hb.express();
+      const locals = createLocals(tempViewsDir, {
+        cache: true
+      });
+
+      const result = await renderTemplateResult(render, indexPath, locals);
+      assert(result.err);
+      assert(result.err.message.includes('does not reside in'));
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should allow declarative layouts for templates resolved from a later views directory', async () => {
+    const hb = hbs.create();
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'express-hbs-issue-270-multi-views-'));
+
+    try {
+      const viewsA = path.join(tempRoot, 'views-a');
+      const viewsB = path.join(tempRoot, 'views-b');
+      const indexPath = path.join(viewsB, 'index.hbs');
+      const layoutPath = path.join(viewsB, 'layouts', 'default.hbs');
+
+      await fs.mkdir(path.dirname(layoutPath), { recursive: true });
+      await fs.mkdir(viewsA, { recursive: true });
+      await fs.writeFile(indexPath, '{{!< layouts/default}}Hello');
+      await fs.writeFile(layoutPath, '<layout>{{{body}}}</layout>');
+
+      const render = hb.express({
+        viewsDir: [viewsA, viewsB]
+      });
+
+      const html = await renderTemplate(render, indexPath, {
+        cache: true,
+        settings: {
+          views: [viewsA, viewsB]
+        }
+      });
+
+      assert.equal(stripWs(html), '<layout>Hello</layout>');
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('issue-160', () => {

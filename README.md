@@ -94,6 +94,12 @@ There are three ways to use a layout, listed in precedence order
 
         {{!< LAYOUT}}
 
+    Declarative layouts are restricted to a safe root by default:
+    if the path starts with `.`, it is confined to the template's directory;
+    otherwise it is confined to `layoutsDir` when configured, or to the template's directory when not.
+
+    Set `restrictLayoutsTo` to override or tighten that root explicitly.
+
     Layout file resolution:
 
         If path starts with '.'
@@ -151,12 +157,23 @@ infinite loops!
 
 ```js
 hbs.registerHelper('link', function(text, options) {
-  var attrs = [];
-  for(var prop in options.hash) {
-    attrs.push(prop + '="' + options.hash[prop] + '"');
+  const isSafeAttrName = (name) => /^[A-Za-z_:][A-Za-z0-9:._-]*$/.test(name);
+  const attrs = [];
+
+  for (const prop in options.hash) {
+    if (!isSafeAttrName(prop)) {
+      continue;
+    }
+
+    attrs.push(
+      prop + '="' + hbs.Utils.escapeExpression(options.hash[prop]) + '"'
+    );
   }
+
+  const escapedText = hbs.Utils.escapeExpression(text);
+  const attrText = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
   return new hbs.SafeString(
-    "<a " + attrs.join(" ") + ">" + text + "</a>"
+    "<a" + attrText + ">" + escapedText + "</a>"
   );
 });
 ```
@@ -170,8 +187,29 @@ in markup
 
 ```js
 hbs.registerAsyncHelper('readFile', function(filename, cb) {
-  fs.readFile(path.join(viewsDir, filename), 'utf8', function(err, content) {
-    cb(new hbs.SafeString(content));
+  const resolvedPath = path.resolve(viewsDir, filename);
+  fs.realpath(viewsDir, function(baseErr, realViewsDir) {
+    if (baseErr) {
+      cb(new hbs.SafeString(''));
+      return;
+    }
+
+    fs.realpath(resolvedPath, function(pathErr, realResolvedPath) {
+      if (pathErr) {
+        cb(new hbs.SafeString(''));
+        return;
+      }
+
+      const relativePath = path.relative(realViewsDir, realResolvedPath);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        cb(new hbs.SafeString(''));
+        return;
+      }
+
+      fs.readFile(realResolvedPath, 'utf8', function(err, content) {
+        cb(new hbs.SafeString(err ? '' : content));
+      });
+    });
   });
 });
 ```

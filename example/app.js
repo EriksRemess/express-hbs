@@ -1,6 +1,6 @@
 import hbsDefault from '#hbs';
 import express from 'express';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const relative = (filePath) => path.join(__dirname, filePath);
+const isSafeAttrName = (name) => /^[A-Za-z_:][A-Za-z0-9:._-]*$/.test(name);
 
 function isMainModule() {
   if (!process.argv[1]) {
@@ -49,16 +50,30 @@ export function create(hbs, env) {
   // Register sync helper
   hbs.registerHelper('link', (text, options) => {
     const attrs = Object.entries(options.hash)
-      .map(([name, value]) => `${name}="${value}"`)
+      .filter(([name]) => isSafeAttrName(name))
+      .map(([name, value]) => `${name}="${hbs.Utils.escapeExpression(value)}"`)
       .join(' ');
-    return new hbs.SafeString(`<a ${attrs}>${text}</a>`);
+    const escapedText = hbs.Utils.escapeExpression(text);
+    const attrText = attrs ? ` ${attrs}` : '';
+    return new hbs.SafeString(`<a${attrText}>${escapedText}</a>`);
   });
 
   // Register async helpers
   hbs.registerAsyncHelper('readFile', async (filename, cb) => {
-    let content;
+    let content = '';
     try {
-      content = await readFile(path.join(viewsDir, filename), 'utf8');
+      const resolvedPath = path.resolve(viewsDir, filename);
+      const [realViewsDir, realResolvedPath] = await Promise.all([
+        realpath(viewsDir),
+        realpath(resolvedPath)
+      ]);
+      const relativePath = path.relative(realViewsDir, realResolvedPath);
+
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        throw new Error(`Refusing to read file outside of viewsDir: ${filename}`);
+      }
+
+      content = await readFile(realResolvedPath, 'utf8');
     } catch (err) {
       console.error(err);
     }
