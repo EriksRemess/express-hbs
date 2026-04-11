@@ -1,7 +1,7 @@
 import hbs from '#hbs';
 import { HandlebarsEnvironment } from '#handlebars/base';
 import { createNewLookupObject } from '#handlebars/internal/create-new-lookup-object';
-import { done, hasResolvers, resolve } from '#lib/resolver';
+import { done, hasResolvers, resolve, resolverPendingEntriesKey } from '#lib/resolver';
 import { fromHere } from '#test/fixtures/paths';
 import { describe, it } from '#test/testkit';
 import handlebars from '#handlebars';
@@ -56,6 +56,30 @@ describe('lib helpers', () => {
       assert.throws(() => resolve(null, () => {}, undefined), /Resolver cache must be a Map or an object/);
       assert.throws(() => resolve({}, null, undefined), /Resolver callback must be a function/);
       assert.throws(() => done({}, 'bad-callback'), /Resolver completion callback must be a function/);
+    });
+
+    it('should resolve map-based async placeholders with queued and direct entries', async () => {
+      const hb = hbs.create();
+      const queuedId = '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__';
+      const directId = '__aSyNcId__<_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__';
+      const queuedCache = new Map();
+      queuedCache[resolverPendingEntriesKey] = [];
+
+      const queuedPromise = Promise.resolve().then(() => {
+        const directPromise = Promise.resolve('done');
+        queuedCache.set(directId, directPromise);
+        queuedCache[resolverPendingEntriesKey].push([queuedId, Promise.resolve('ignored')]);
+        queuedCache[resolverPendingEntriesKey].push([directId, directPromise]);
+        return directId;
+      });
+
+      queuedCache.set(queuedId, queuedPromise);
+      queuedCache[resolverPendingEntriesKey].push([queuedId, queuedPromise]);
+
+      assert.equal(await hb._resolveAsyncHtml(queuedCache, queuedId), 'done');
+
+      const directCache = new Map([[directId, Promise.resolve('direct-only')]]);
+      assert.equal(await hb._resolveAsyncHtml(directCache, `<p>${directId}</p>`), '<p>direct-only</p>');
     });
   });
 
@@ -283,6 +307,30 @@ describe('lib helpers', () => {
       assert.equal(templateOptions.data.when instanceof Date, true);
     });
 
+    it('sanitizes array and primitive local template option payloads', () => {
+      const hb = hbs.create();
+      const arrayLocals = {};
+      const arrayOptions = [{
+        ok: true,
+        nested: { value: 1 }
+      }];
+      Object.defineProperty(arrayOptions[0].nested, 'constructor', {
+        value: 'bad',
+        enumerable: true
+      });
+
+      const updatedArray = hb.updateLocalTemplateOptions(arrayLocals, arrayOptions);
+      assert.deepEqual(updatedArray, [{
+        ok: true,
+        nested: { value: 1 }
+      }]);
+      assert.equal(Object.hasOwn(updatedArray[0].nested, 'constructor'), false);
+
+      const primitiveLocals = {};
+      assert.equal(hb.updateLocalTemplateOptions(primitiveLocals, 5), 5);
+      assert.equal(primitiveLocals._templateOptions, 5);
+    });
+
     it('handles path helpers edge cases', () => {
       const hb = hbs.create();
       assert.equal(hb.layoutPath('/tmp/a.hbs', 'layout', []), undefined);
@@ -309,6 +357,22 @@ describe('lib helpers', () => {
       assert.equal(hb.filenameDirCache.size, 1);
     });
 
+    it('covers implicit layout restriction roots for relative, layout, and views fallbacks', () => {
+      const hb = hbs.create();
+      const filename = '/tmp/views/sub/template.hbs';
+
+      hb.layoutsDir = '/tmp/layouts';
+      assert.equal(hb._getImplicitDeclaredLayoutRestrictionRoot(filename, '/tmp/views', 'layout'), '/tmp/layouts');
+
+      hb.layoutsDir = ['/tmp/layouts-array'];
+      assert.equal(hb._getImplicitDeclaredLayoutRestrictionRoot(filename, '/tmp/views', 'layout'), '/tmp/layouts-array');
+      assert.equal(hb._getImplicitLayoutRestrictionRoot(filename, '/tmp/views', './layout'), '/tmp/views/sub');
+      assert.equal(hb._getImplicitLayoutRestrictionRoot(filename, '/tmp/views', 'layout'), '/tmp/layouts-array');
+
+      hb.layoutsDir = null;
+      assert.equal(hb._getImplicitLayoutRestrictionRoot(filename, ['/tmp/views-a', '/tmp/views-b'], 'layout'), '/tmp/views-a');
+    });
+
     it('uses null-prototype block caches for helper-controlled names', () => {
       const hb = hbs.create();
       const blockCache = Object.create(null);
@@ -328,6 +392,44 @@ describe('lib helpers', () => {
       assert.throws(() => hb.express({ extname: '../x' }), /extname must be a non-empty file extension string/);
       assert.throws(() => hb.express({ partialsDir: ['', issuesDir] }), /partialsDir entries must be non-empty strings/);
       assert.throws(() => hb.express('bad'), /options must be an object/);
+    });
+
+    it('accepts disabled default layouts and validates helper name options', () => {
+      const hb = hbs.create();
+      hb.express({ defaultLayout: false });
+      assert.equal(hb._options.defaultLayout, false);
+
+      assert.throws(() => hb.express({ contentHelperName: {} }), /contentHelperName must be a non-empty string/);
+      assert.throws(() => hb.express({ blockHelperName: {} }), /blockHelperName must be a non-empty string/);
+    });
+
+    it('skips unsafe keys when cloning engine and template options', () => {
+      const hb = hbs.create();
+      hb.express({
+        extname: '.hbs',
+        constructor: 'bad'
+      });
+
+      assert.equal(hb._options.extname, '.hbs');
+      assert.equal(Object.hasOwn(hb._options, 'constructor'), false);
+
+      hb.updateTemplateOptions({
+        safe: 1,
+        constructor: 'bad'
+      });
+
+      const template = (_localsArg, templateOptions) => templateOptions;
+      template.__filename = 'x.hbs';
+
+      const result = hb._renderTemplate(template, {
+        _templateOptions: {
+          extra: 2,
+          constructor: 'bad'
+        }
+      });
+
+      assert.deepEqual(result, { safe: 1, extra: 2 });
+      assert.equal(Object.hasOwn(result, 'constructor'), false);
     });
 
     it('lists partials recursively with fs.glob', async () => {
@@ -534,6 +636,40 @@ describe('lib helpers', () => {
 
         await hb.cacheLayout(path.join(tempRoot, 'first'), false);
         await hb.cacheLayout(path.join(tempRoot, 'second'), false);
+
+        assert.equal(rootRealpathCalls, 1);
+      } finally {
+        fs.realpath = originalRealpath;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('reuses cached restrictLayoutsTo realpaths through ensureInRestrictLayoutsTo', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-ensure-root-'));
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+      const originalRealpath = fs.realpath;
+      const rootPath = path.resolve(tempRoot);
+      let rootRealpathCalls = 0;
+
+      await fs.writeFile(layoutFile, 'layout', 'utf8');
+
+      fs.realpath = async (...args) => {
+        if (path.resolve(args[0]) === rootPath) {
+          rootRealpathCalls += 1;
+        }
+        return originalRealpath(...args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        await hb._ensureInRestrictLayoutsTo(layoutFile);
+        hb.layoutRestrictionRootRealpaths = new Map();
+        await hb._ensureLayoutWithinRoot(layoutFile, tempRoot);
 
         assert.equal(rootRealpathCalls, 1);
       } finally {
@@ -949,6 +1085,39 @@ describe('lib helpers', () => {
           resolve();
         });
       });
+    });
+
+    it('reuses cached default layout templates in promise mode', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-default-layout-cache-'));
+      const layoutFile = path.join(tempRoot, 'default.hbs');
+      const originalCacheLayout = hb._cacheLayout;
+      let cacheLayoutCalls = 0;
+
+      await fs.writeFile(layoutFile, '{{{body}}}', 'utf8');
+
+      hb._cacheLayout = async function(...args) {
+        cacheLayoutCalls += 1;
+        return originalCacheLayout.apply(this, args);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          defaultLayout: path.join(tempRoot, 'default'),
+          restrictLayoutsTo: tempRoot
+        });
+
+        const first = await hb._loadDefaultLayout(true, tempRoot);
+        const second = await hb._loadDefaultLayout(true, tempRoot);
+
+        assert.equal(first.length, 1);
+        assert.equal(second, hb.defaultLayoutTemplates);
+        assert.equal(cacheLayoutCalls, 1);
+      } finally {
+        hb._cacheLayout = originalCacheLayout;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
 
     it('does not load the default layout when render options disable layouts', async () => {
