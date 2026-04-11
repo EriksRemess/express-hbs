@@ -23,8 +23,8 @@ describe('lib helpers', () => {
 
   describe('resolver', () => {
     it('should detect resolver token at string start', () => {
-      assert.equal(hasResolvers('__aSyNcId__<_aaaaaaab__'), true);
-      assert.equal(hasResolvers('__aSyNcId__&lt;_aaaaaaab__'), true);
+      assert.equal(hasResolvers('__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'), true);
+      assert.equal(hasResolvers('__aSyNcId__&lt;_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'), true);
     });
 
     it('should ignore literal async prefix text that is not a full token', () => {
@@ -39,7 +39,7 @@ describe('lib helpers', () => {
       });
 
       assert.equal(cache.has(id), true);
-      assert.match(id, /^__aSyNcId__<_[A-Za-z_]{8}__$/);
+      assert.match(id, /^__aSyNcId__<_[a-f0-9]{32}__$/);
       const values = await resolveCache(cache);
       assert.equal(values[id], 'resolved');
     });
@@ -165,6 +165,28 @@ describe('lib helpers', () => {
       assert.equal({}.pollute, undefined);
     });
 
+    it('strips security-sensitive keys from local template options', () => {
+      const hb = hbs.create();
+      const template = (_localsArg, templateOptions) => templateOptions;
+      template.__filename = 'x.hbs';
+
+      const templateOptions = hb._renderTemplate(template, {
+        _templateOptions: {
+          data: { ok: true },
+          allowedProtoProperties: { secret: true },
+          allowProtoPropertiesByDefault: true,
+          allowedProtoMethods: { trim: true },
+          allowProtoMethodsByDefault: true,
+          allowCallsToHelperMissing: true,
+          protoAccessControl: { properties: {} }
+        }
+      });
+
+      assert.deepEqual(templateOptions, {
+        data: { ok: true }
+      });
+    });
+
     it('handles non-object template options sources', () => {
       const hb = hbs.create();
       const template = (_localsArg, templateOptions) => templateOptions;
@@ -230,6 +252,35 @@ describe('lib helpers', () => {
 
       assert.throws(() => hb._renderTemplate(template, locals), /\[x\.hbs\] boom/);
       assert.deepEqual(locals._templateOptions, { x: 1 });
+    });
+
+    it('sanitizes template options written through updateLocalTemplateOptions', () => {
+      const hb = hbs.create();
+      const locals = {};
+
+      const templateOptions = hb.updateLocalTemplateOptions(locals, {
+        data: { ok: true },
+        allowProtoPropertiesByDefault: true,
+        allowCallsToHelperMissing: true
+      });
+
+      assert.deepEqual(templateOptions, {
+        data: { ok: true }
+      });
+      assert.deepEqual(locals._templateOptions, templateOptions);
+    });
+
+    it('preserves non-plain values nested in local template options', () => {
+      const hb = hbs.create();
+      const when = new Date('2020-01-02T03:04:05.000Z');
+      const locals = {};
+
+      const templateOptions = hb.updateLocalTemplateOptions(locals, {
+        data: { when }
+      });
+
+      assert.equal(templateOptions.data.when, when);
+      assert.equal(templateOptions.data.when instanceof Date, true);
     });
 
     it('handles path helpers edge cases', () => {
@@ -329,7 +380,32 @@ describe('lib helpers', () => {
       }
     });
 
-    it('cacheLayout skips repeated realpath checks when the layout is cached', async () => {
+    it('cacheLayout keeps serving cached layouts even if the source file disappears', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-cache-'));
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+
+      await fs.writeFile(layoutFile, 'layout', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        const firstLayouts = await hb.cacheLayout(path.join(tempRoot, 'layout'), true);
+        assert.equal(firstLayouts[0]({}), 'layout');
+
+        await fs.rm(layoutFile);
+
+        const secondLayouts = await hb.cacheLayout(path.join(tempRoot, 'layout'), true);
+        assert.equal(secondLayouts[0]({}), 'layout');
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('cacheLayout only validates the filesystem before the first cached read', async () => {
       const hb = hbs.create();
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-realpath-'));
       const layoutFile = path.join(tempRoot, 'layout.hbs');
@@ -355,6 +431,78 @@ describe('lib helpers', () => {
         assert.equal(realpathCalls, 2);
       } finally {
         fs.realpath = originalRealpath;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('cacheLayout revalidates uncached symlinked layouts after the symlink target changes', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-symlink-'));
+      const allowedRoot = path.join(tempRoot, 'allowed');
+      const outsideRoot = path.join(tempRoot, 'outside');
+      const safeFile = path.join(allowedRoot, 'safe.hbs');
+      const outsideFile = path.join(outsideRoot, 'outside.hbs');
+      const symlinkFile = path.join(allowedRoot, 'link.hbs');
+
+      await fs.mkdir(allowedRoot, { recursive: true });
+      await fs.mkdir(outsideRoot, { recursive: true });
+      await fs.writeFile(safeFile, 'safe', 'utf8');
+      await fs.writeFile(outsideFile, 'outside', 'utf8');
+      await fs.symlink(safeFile, symlinkFile);
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: allowedRoot
+        });
+
+        const firstLayouts = await hb.cacheLayout(path.join(allowedRoot, 'link'), false);
+        assert.equal(firstLayouts[0]({}), 'safe');
+
+        await fs.rm(symlinkFile);
+        await fs.symlink(outsideFile, symlinkFile);
+
+        await assert.rejects(
+          hb.cacheLayout(path.join(allowedRoot, 'link'), false),
+          /does not reside in/
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('cacheLayout does not reuse cached layouts across different allowed roots', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-root-scope-'));
+      const viewsA = path.join(tempRoot, 'viewsA');
+      const viewsB = path.join(tempRoot, 'viewsB');
+      const layoutFile = path.join(viewsA, 'layout.hbs');
+
+      await fs.mkdir(viewsA, { recursive: true });
+      await fs.mkdir(viewsB, { recursive: true });
+      await fs.writeFile(layoutFile, '<layout>{{{body}}}</layout>', 'utf8');
+
+      try {
+        hb.express({ extname: '.hbs' });
+
+        const firstLayouts = await hb._resolveLayoutTemplates(
+          path.join(viewsA, 'page.hbs'),
+          { declaredLayoutFile: undefined },
+          { cache: true, layout: layoutFile },
+          viewsA
+        );
+        assert.equal(firstLayouts.length, 1);
+
+        await assert.rejects(
+          hb._resolveLayoutTemplates(
+            path.join(viewsB, 'page.hbs'),
+            { declaredLayoutFile: undefined },
+            { cache: true, layout: layoutFile },
+            viewsB
+          ),
+          /does not reside in/
+        );
+      } finally {
         await fs.rm(tempRoot, { recursive: true, force: true });
       }
     });
@@ -977,18 +1125,18 @@ describe('lib helpers', () => {
       );
     });
 
-    it('rejects unresolved async placeholder loops', async () => {
+    it('ignores untracked async placeholder lookalikes during resolution', async () => {
       const hb = hbs.create();
-      await assert.rejects(
-        hb._resolveAsyncHtml(Object.create(null), '__aSyNcId__<_aaaaaaab__'),
-        /unresolved async placeholder/i
+      assert.equal(
+        await hb._resolveAsyncHtml(Object.create(null), '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'),
+        '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'
       );
     });
 
     it('resolves nested async placeholder chains', async () => {
       const hb = hbs.create();
-      const firstId = '__aSyNcId__<_aaaaaaab__';
-      const secondId = '__aSyNcId__<_aaaaaaac__';
+      const firstId = '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__';
+      const secondId = '__aSyNcId__<_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__';
 
       const resolverCache = {
         [firstId]: Promise.resolve(secondId),
@@ -1003,8 +1151,8 @@ describe('lib helpers', () => {
 
     it('rejects cyclic async placeholder chains', async () => {
       const hb = hbs.create();
-      const firstId = '__aSyNcId__<_aaaaaaab__';
-      const secondId = '__aSyNcId__<_aaaaaaac__';
+      const firstId = '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__';
+      const secondId = '__aSyNcId__<_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__';
 
       const resolverCache = {
         [firstId]: Promise.resolve(secondId),
@@ -1055,6 +1203,20 @@ describe('lib helpers', () => {
       assert.equal(
         await hb._renderFile('/tmp/inline.hbs', 'literal __aSyNcId__ text', {}),
         'literal __aSyNcId__ text'
+      );
+    });
+
+    it('does not replace user-supplied async placeholder lookalikes', async () => {
+      const hb = hbs.create();
+      hb.registerAsyncHelper('secret', cb => cb('<b>X</b>'));
+
+      assert.equal(
+        await hb._renderFile(
+          '/tmp/inline.hbs',
+          '{{secret}}|{{text}}|{{{text}}}',
+          { text: '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__' }
+        ),
+        '&lt;b&gt;X&lt;/b&gt;|__aSyNcId__&lt;_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__|__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'
       );
     });
 

@@ -86,6 +86,13 @@ describe('layouts', () => {
       assert.equal('<dld>aside</dld>', stripWs(html));
     });
 
+    it('should allow options.layout inside the inferred safe root without restrictLayoutsTo', async () => {
+      const render = hbs.create().express({});
+      const locals = createLocals('express', dirname, { layout: 'layouts/default' });
+      const html = await renderTemplate(render, dirname + '/aside.hbs', locals);
+      assert.equal('<dld>aside</dld>', stripWs(html));
+    });
+
     it('should error when using a layout outside of the restrictLayoutsTo', async () => {
       const render = hbs.create().express({
         restrictLayoutsTo: path.resolve(path.join(__dirname, '../'))
@@ -95,6 +102,15 @@ describe('layouts', () => {
       if (!result.err) {
         throw new Error('We expect an error when reading');
       }
+    });
+
+    it('should reject options.layout outside the inferred safe root when restrictLayoutsTo is unset', async () => {
+      const render = hbs.create().express({});
+      const outsideLayout = path.join(__dirname, 'issues/53/default.hbs');
+      const locals = createLocals('express', dirname, { layout: outsideLayout });
+      const result = await renderTemplateResult(render, dirname + '/aside.hbs', locals);
+      assert(result.err);
+      assert.match(result.err.message, /does not reside in/);
     });
 
     it('should not process template-specified layout when options.layout is falsy', async () => {

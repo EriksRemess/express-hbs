@@ -105,9 +105,11 @@ There are three ways to use a layout, listed in precedence order
 
 2.  As an option to render
 
-    ## ⚠️ This creates a potential security vulnerability if used without a `restrictLayoutsTo`:
+    `layout` is restricted to a safe root by default:
+    if it starts with `.`, it is confined to the template's directory;
+    otherwise it is confined to `layoutsDir` when configured, or `views` when not.
 
-    The `restrictLayoutsTo` option will restrict reading layouts to a particular directory, if you do not pass this option then do not use the `layout` option in conjunction with passing user submitted data to res.render e.g. `res.render('index', req.query)`. This allows users to read arbitrary files from your filesystem!
+    Set `restrictLayoutsTo` to override or tighten that root explicitly, including when you want to allow absolute layout paths inside a particular directory.
 
     ```js
     res.render('veggies', {
@@ -224,6 +226,8 @@ var instance2 = hbs.create();
 The main use case for template options is setting the handlebars "data" object - this creates global template variables accessible with an `@` prefix.
 
 Template options can be set in 3 ways. When setting global template options they can be [passed as config on creation of an instance](https://github.com/barc/express-hbs#usage), and they can also be updated used the `updateTemplateOptions(templateOptions)` method of an instance. To set template options for an individual request they can be set on `res.locals` using the helper method `updateLocalTemplateOptions(locals, templateOptions)`.
+
+Per-request local template options are sanitized before render and cannot override Handlebars runtime security controls such as prototype-access settings or `allowCallsToHelperMissing`.
 
 Both of these methods have a companion method `getTemplateOptions()` and `getLocalTemplateOptions(locals)`, which should be used when extending or merging the current options.
 
