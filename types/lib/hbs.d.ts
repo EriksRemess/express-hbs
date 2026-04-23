@@ -51,6 +51,7 @@ declare class ExpressHbs {
     partialsManifestKey: any;
     partialsSourceCache: any;
     partialsMetadataCache: any;
+    _managedPartialValues: Map<any, any>;
     uncachedLayoutCache: Map<any, any>;
     uncachedTemplateCache: Map<any, any>;
     partialsDir: any;
@@ -183,7 +184,7 @@ declare class ExpressHbs {
      * @param {string | string[]} viewsDir
      * @returns {Promise<Function[]>}
      */
-    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: any): Promise<Function[]>;
+    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: any, seenLayouts?: Set<any>): Promise<Function[]>;
     /**
      * Callback/Promise wrapper for layout caching.
      *
@@ -215,6 +216,12 @@ declare class ExpressHbs {
      * @returns {void}
      */
     invalidatePartialsManifest(): void;
+    /**
+     * Removes partials registered from `partialsDir` when they still point at the engine-managed value.
+     *
+     * @returns {void}
+     */
+    _unregisterManagedPartials(): void;
     /**
      * Configures this instance and returns an Express-compatible render function.
      *
@@ -422,6 +429,13 @@ declare class ExpressHbs {
      * @returns {Promise<Record<string, unknown>>}
      */
     _resolveAsyncValues(cache: Map<string, Promise<unknown>> | Record<string, Promise<unknown>>): Promise<Record<string, unknown>>;
+    /**
+     * Awaits async helper work that was queued but removed from the final output.
+     *
+     * @param {Map<string, Promise<unknown>> | Record<string, Promise<unknown>>} resolverCache
+     * @returns {Promise<void>}
+     */
+    _drainAsyncValues(resolverCache: Map<string, Promise<unknown>> | Record<string, Promise<unknown>>): Promise<void>;
     /**
      * Repeatedly resolves async placeholders until the output is stable.
      *

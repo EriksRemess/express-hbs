@@ -52,6 +52,19 @@ describe('lib helpers', () => {
       await assert.rejects(done(cache), /boom/);
     });
 
+    it('should resolve and reject promise-returning resolver callbacks', async () => {
+      const resolvedCache = new Map();
+      const resolvedId = resolve(resolvedCache, async () => 'promise-value');
+      const values = await done(resolvedCache);
+      assert.equal(values[resolvedId], 'promise-value');
+
+      const rejectedCache = new Map();
+      resolve(rejectedCache, async () => {
+        throw new Error('promise-boom');
+      });
+      await assert.rejects(done(rejectedCache), /promise-boom/);
+    });
+
     it('should reject invalid resolver inputs', () => {
       assert.throws(() => resolve(null, () => {}, undefined), /Resolver cache must be a Map or an object/);
       assert.throws(() => resolve({}, null, undefined), /Resolver callback must be a function/);
@@ -1001,6 +1014,80 @@ describe('lib helpers', () => {
       }
     });
 
+    it('removes stale managed partials when the manifest is invalidated', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-delete-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      const viewsDir = path.join(tempRoot, 'views');
+      const partialFile = path.join(partialsDir, 'gone.hbs');
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(partialFile, 'gone-v1', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          partialsDir,
+          viewsDir
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> gone}}', { cache: false, settings: { views: viewsDir } }),
+          'gone-v1 '
+        );
+
+        await fs.rm(partialFile);
+        hb.invalidatePartialsManifest();
+
+        await assert.rejects(
+          hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> gone}}', { cache: false, settings: { views: viewsDir } }),
+          /partial gone could not be found/i
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('removes managed partials when reconfiguring the same instance', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-reconfigure-'));
+      const oldPartialsDir = path.join(tempRoot, 'old');
+      const newPartialsDir = path.join(tempRoot, 'new');
+      const viewsDir = path.join(tempRoot, 'views');
+
+      await fs.mkdir(oldPartialsDir, { recursive: true });
+      await fs.mkdir(newPartialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(path.join(oldPartialsDir, 'old.hbs'), 'old-partial', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          partialsDir: oldPartialsDir,
+          viewsDir
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> old}}', { cache: false, settings: { views: viewsDir } }),
+          'old-partial '
+        );
+
+        hb.express({
+          extname: '.hbs',
+          partialsDir: newPartialsDir,
+          viewsDir
+        });
+
+        await assert.rejects(
+          hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> old}}', { cache: false, settings: { views: viewsDir } }),
+          /partial old could not be found/i
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     it('accepts external handlebars in express options', () => {
       const hb = hbs.create();
       const external = handlebars.create();
@@ -1116,6 +1203,42 @@ describe('lib helpers', () => {
         assert.equal(cacheLayoutCalls, 1);
       } finally {
         hb._cacheLayout = originalCacheLayout;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('does not seed the production default layout cache from an uncached render', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-default-layout-mode-'));
+      const layoutFile = path.join(tempRoot, 'default.hbs');
+
+      await fs.writeFile(layoutFile, 'v1 {{{body}}}', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          defaultLayout: path.join(tempRoot, 'default'),
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(tempRoot, 'inline.hbs'), 'page', {
+            cache: false,
+            settings: { views: tempRoot }
+          }),
+          'v1 page'
+        );
+
+        await fs.writeFile(layoutFile, 'v2 {{{body}}}', 'utf8');
+
+        assert.equal(
+          await hb._renderFile(path.join(tempRoot, 'inline.hbs'), 'page', {
+            cache: true,
+            settings: { views: tempRoot }
+          }),
+          'v2 page'
+        );
+      } finally {
         await fs.rm(tempRoot, { recursive: true, force: true });
       }
     });
@@ -1272,6 +1395,42 @@ describe('lib helpers', () => {
       assert.throws(() => hb.handlebars.helpers.x.call({}, 'hello'), /Could not find resolver cache/);
     });
 
+    it('supports promise-returning async helpers', async () => {
+      const hb = hbs.create();
+      hb.express({});
+      hb.registerAsyncHelper('later', async (value) => `async:${value}`);
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{later "x"}}!', {}),
+        'async:x!'
+      );
+    });
+
+    it('rejects async helper failures even when placeholders are removed from the output', async () => {
+      const hb = hbs.create();
+      hb.express({});
+      hb.registerAsyncHelper('boom', async () => {
+        throw new Error('hidden-boom');
+      });
+
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', '{{#contentFor "unused"}}{{boom}}{{/contentFor}}ok', {}),
+        /hidden-boom/
+      );
+    });
+
+    it('renders nullish async helper values like synchronous helpers', async () => {
+      const hb = hbs.create();
+      hb.express({});
+      hb.registerAsyncHelper('undef', async () => undefined);
+      hb.registerAsyncHelper('nil', async () => null);
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', 'a{{undef}}b|a{{{undef}}}b|a{{nil}}b|a{{{nil}}}b', {}),
+        'ab|ab|ab|ab'
+      );
+    });
+
     it('rejects invalid render options and callbacks', async () => {
       const hb = hbs.create();
       hb.express({
@@ -1292,6 +1451,38 @@ describe('lib helpers', () => {
         () => hb.___express(path.join(issuesDir, '23/index.hbs'), {}, {}),
         /Render callback must be a function/
       );
+    });
+
+    it('reports a clear safe-root error for options.layout without viewsDir', async () => {
+      const hb = hbs.create();
+      hb.express({});
+
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', 'body', { layout: 'default' }),
+        /Cannot resolve a safe root for options\.layout/
+      );
+    });
+
+    it('rejects circular layout chains', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-cycle-'));
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+
+      await fs.writeFile(layoutFile, '{{!< ./layout}}\n{{{body}}}', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: tempRoot
+        });
+
+        await assert.rejects(
+          hb.cacheLayout(path.join(tempRoot, 'layout'), false),
+          /circular layout dependency/i
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
 
     it('ignores untracked async placeholder lookalikes during resolution', async () => {
