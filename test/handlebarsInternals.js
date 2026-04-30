@@ -369,6 +369,44 @@ describe('handlebars unit internals', () => {
     );
   });
 
+  it('does not iterate prototype-polluted array holes', () => {
+    const template = handlebars.compile('{{#each items}}{{{this}}}{{else}}empty{{/each}}');
+    const payload = '<img src=x onerror=alert(1)>';
+
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      writable: true,
+      value: payload
+    });
+
+    try {
+      assert.equal(template({ items: new Array(1) }), '');
+    } finally {
+      delete Array.prototype[0];
+    }
+  });
+
+  it('does not iterate polluted Object prototype iterators', () => {
+    const template = handlebars.compile('{{#each item}}{{{this}}}{{else}}empty{{/each}}');
+    const payload = '<img src=x onerror=alert(1)>';
+    class Item {}
+
+    Object.defineProperty(Object.prototype, Symbol.iterator, {
+      configurable: true,
+      writable: true,
+      value: function* pollutedIterator() {
+        yield payload;
+      }
+    });
+
+    try {
+      assert.equal(template({ item: {} }), 'empty');
+      assert.equal(template({ item: new Item() }), 'empty');
+    } finally {
+      delete Object.prototype[Symbol.iterator];
+    }
+  });
+
   it('wraps helpers without changing non-functions or call semantics', () => {
     const passthrough = { helper: true };
     assert.equal(wrapHelper(passthrough, () => undefined), passthrough);

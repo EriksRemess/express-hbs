@@ -388,8 +388,47 @@ describe('compiler internals', () => {
         () => compile(badPartsAst, {}, hb)({}),
         /Invalid AST: PathExpression\.parts must only contain strings/
       );
+
+      Object.defineProperty(Object.prototype, 'type', {
+        configurable: true,
+        value: 'Program'
+      });
+      try {
+        assert.throws(
+          () => compile({ body: [], strip: {} }, {}, hb),
+          /You must pass a string or Handlebars AST/
+        );
+        assert.equal(hb.compile('plain')({}), 'plain');
+      } finally {
+        delete Object.prototype.type;
+      }
+
+      const inheritedContentAst = program(
+        Object.create({
+          type: 'ContentStatement',
+          value: '<img src=x onerror=alert(1)>',
+          original: 'x'
+        })
+      );
+      assert.throws(
+        () => compile(inheritedContentAst, {}, hb)({}),
+        /Unknown type: undefined/
+      );
+
+      const inheritedValueAst = program({
+        type: 'ContentStatement',
+        original: 'x'
+      });
+      Object.setPrototypeOf(inheritedValueAst.body[0], {
+        value: '<img src=x onerror=alert(1)>'
+      });
+      assert.throws(
+        () => compile(inheritedValueAst, {}, hb)({}),
+        /Invalid AST: ContentStatement\.value must be an own property/
+      );
     } finally {
       delete globalThis.__expressHbsAstInjectionProbe;
+      delete Object.prototype.type;
     }
   });
 
