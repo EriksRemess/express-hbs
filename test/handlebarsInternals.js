@@ -288,6 +288,87 @@ describe('handlebars unit internals', () => {
     }
   });
 
+  it('rejects prototype-polluted partial template injection', () => {
+    const payload = '<img src=x onerror="alert(document.domain)">';
+
+    Object.defineProperty(Object.prototype, 'widget', {
+      configurable: true,
+      value: payload
+    });
+
+    try {
+      const hb = handlebars.create();
+      const templateWithPartial = hb.compile('<div>Welcome! {{> widget}}</div>');
+      assert.throws(
+        () => templateWithPartial({}),
+        /The partial widget could not be found/
+      );
+    } finally {
+      delete Object.prototype.widget;
+    }
+  });
+
+  it('does not compile crafted ASTs from partial resolution exploits', () => {
+    const hb = handlebars.create();
+    const compile = hb.compile.bind(hb);
+    const dynamicTemplate = compile('{{> (lookup . "partialName")}}');
+    const dynamicPartialAst = {
+      type: 'Program',
+      body: [{
+        type: 'ContentStatement',
+        original: '<img src=x onerror=alert(1)>',
+        value: '<img src=x onerror=alert(1)>'
+      }],
+      blockParams: [],
+      call: true
+    };
+    let attemptedAstCompile = false;
+
+    hb.compile = function(input, ...args) {
+      if (input === dynamicPartialAst) {
+        attemptedAstCompile = true;
+      }
+
+      return compile(input, ...args);
+    };
+
+    assert.throws(
+      () => dynamicTemplate({ partialName: dynamicPartialAst }),
+      /The partial undefined could not be found/
+    );
+
+    const tamperedPartialBlockTemplate = template({
+      main(container, context, helpers, partials, data) {
+        data['partial-block'] = dynamicPartialAst;
+        return container.invokePartial(undefined, context, {
+          name: '@partial-block',
+          data,
+          partials
+        });
+      },
+      usePartial: true,
+      useData: true
+    }, hb);
+    assert.throws(
+      () => tamperedPartialBlockTemplate({}),
+      /The partial @partial-block could not be found/
+    );
+    assert.equal(attemptedAstCompile, false);
+  });
+
+  it('keeps __lookupSetter__ blocked when proto methods are otherwise allowed', () => {
+    const hb = handlebars.create();
+    hb.registerHelper('typeOf', value => typeof value);
+
+    assert.equal(
+      hb.compile('{{typeOf (lookup value "__lookupSetter__")}}')(
+        { value: {} },
+        { allowProtoMethodsByDefault: true }
+      ),
+      'undefined'
+    );
+  });
+
   it('wraps helpers without changing non-functions or call semantics', () => {
     const passthrough = { helper: true };
     assert.equal(wrapHelper(passthrough, () => undefined), passthrough);

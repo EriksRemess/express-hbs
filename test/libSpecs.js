@@ -138,6 +138,23 @@ describe('lib helpers', () => {
       assert.throws(() => env.registerDecorator('prototype', decorator), /reserved name/);
     });
 
+    it('does not trust polluted toStringTag when detecting helper maps', () => {
+      Object.defineProperty(Object.prototype, Symbol.toStringTag, {
+        configurable: true,
+        value: 'Object'
+      });
+
+      try {
+        const env = new HandlebarsEnvironment();
+        assert.throws(
+          () => env.registerHelper(function pollutedHelperMap() {}),
+          /helper name must be a non-empty string/
+        );
+      } finally {
+        delete Object.prototype[Symbol.toStringTag];
+      }
+    });
+
     it('does not resolve prototype-inherited partials from render options', () => {
       const template = handlebars.compile('{{> ghost}}');
       const partials = {};
@@ -325,6 +342,25 @@ describe('lib helpers', () => {
 
       assert.equal(templateOptions.data.when, when);
       assert.equal(templateOptions.data.when instanceof Date, true);
+    });
+
+    it('does not trust polluted toStringTag when cloning template options', () => {
+      Object.defineProperty(Object.prototype, Symbol.toStringTag, {
+        configurable: true,
+        value: 'Object'
+      });
+
+      try {
+        const hb = hbs.create();
+        const hook = () => 'ok';
+        const template = (_localsArg, templateOptions) => templateOptions;
+        template.__filename = 'x.hbs';
+
+        hb.updateTemplateOptions({ hook });
+        assert.equal(hb._renderTemplate(template, {}).hook, hook);
+      } finally {
+        delete Object.prototype[Symbol.toStringTag];
+      }
     });
 
     it('sanitizes array and primitive local template option payloads', () => {
@@ -1481,6 +1517,13 @@ describe('lib helpers', () => {
       await assert.rejects(
         hb._renderFile(path.join(issuesDir, '23/index.hbs'), null, { settings: { views: [''] } }),
         /views entries must be non-empty strings/
+      );
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', 'ok', {
+          settings: Object.create({ views: [''] })
+        }),
+        'ok'
       );
 
       assert.throws(

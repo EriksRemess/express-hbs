@@ -171,6 +171,21 @@ describe('compiler internals', () => {
       'first'
     );
 
+    let reads = 0;
+    const contextWithGetter = { child: {} };
+    Object.defineProperty(contextWithGetter, 'secret', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? 'safe' : 'unsafe';
+      }
+    });
+    assert.equal(
+      hb.compile('{{#with child}}{{secret}}{{/with}}', { compat: true })(contextWithGetter),
+      'safe'
+    );
+    assert.equal(reads, 1);
+
     assert.throws(
       () => hb.compile('{{user.name}}', { strict: true })({}),
       /"name" not defined in undefined/
@@ -313,63 +328,69 @@ describe('compiler internals', () => {
 
   it('rejects type-confused input AST values before code generation', () => {
     const hb = handlebars.create();
+    globalThis.__expressHbsAstInjectionProbe = false;
 
-    const maliciousNumberAst = program({
-      type: 'MustacheStatement',
-      path: pathExpression('inspect'),
-      params: [
-        {
-          type: 'NumberLiteral',
-          value: '0); throw new Error("AST injection"); //',
-          original: 0
-        }
-      ],
-      hash: null,
-      escaped: true,
-      strip: { open: false, close: false }
-    });
-    assert.throws(
-      () => precompile(maliciousNumberAst),
-      /Invalid AST: NumberLiteral\.value must be a number/
-    );
+    try {
+      const maliciousNumberAst = program({
+        type: 'MustacheStatement',
+        path: pathExpression('inspect'),
+        params: [
+          {
+            type: 'NumberLiteral',
+            value: '0); globalThis.__expressHbsAstInjectionProbe = true; //',
+            original: 0
+          }
+        ],
+        hash: null,
+        escaped: true,
+        strip: { open: false, close: false }
+      });
+      assert.throws(
+        () => precompile(maliciousNumberAst),
+        /Invalid AST: NumberLiteral\.value must be a number/
+      );
+      assert.equal(globalThis.__expressHbsAstInjectionProbe, false);
 
-    const badDepthAst = program({
-      type: 'MustacheStatement',
-      path: {
-        type: 'PathExpression',
-        data: false,
-        depth: '0)); throw new Error("AST injection"); //',
-        parts: ['name'],
-        original: 'name'
-      },
-      params: [],
-      hash: null,
-      escaped: true,
-      strip: { open: false, close: false }
-    });
-    assert.throws(
-      () => compile(badDepthAst, {}, hb)({}),
-      /Invalid AST: PathExpression\.depth must be an integer/
-    );
+      const badDepthAst = program({
+        type: 'MustacheStatement',
+        path: {
+          type: 'PathExpression',
+          data: false,
+          depth: '0)); throw new Error("AST injection"); //',
+          parts: ['name'],
+          original: 'name'
+        },
+        params: [],
+        hash: null,
+        escaped: true,
+        strip: { open: false, close: false }
+      });
+      assert.throws(
+        () => compile(badDepthAst, {}, hb)({}),
+        /Invalid AST: PathExpression\.depth must be an integer/
+      );
 
-    const badPartsAst = program({
-      type: 'MustacheStatement',
-      path: {
-        type: 'PathExpression',
-        data: false,
-        depth: 0,
-        parts: ['safe', 1],
-        original: 'safe'
-      },
-      params: [],
-      hash: null,
-      escaped: true,
-      strip: { open: false, close: false }
-    });
-    assert.throws(
-      () => compile(badPartsAst, {}, hb)({}),
-      /Invalid AST: PathExpression\.parts must only contain strings/
-    );
+      const badPartsAst = program({
+        type: 'MustacheStatement',
+        path: {
+          type: 'PathExpression',
+          data: false,
+          depth: 0,
+          parts: ['safe', 1],
+          original: 'safe'
+        },
+        params: [],
+        hash: null,
+        escaped: true,
+        strip: { open: false, close: false }
+      });
+      assert.throws(
+        () => compile(badPartsAst, {}, hb)({}),
+        /Invalid AST: PathExpression\.parts must only contain strings/
+      );
+    } finally {
+      delete globalThis.__expressHbsAstInjectionProbe;
+    }
   });
 
   it('uses contiguous child program indices in compiled specs', () => {
