@@ -403,6 +403,47 @@ describe('handlebars unit internals', () => {
       allowedProtoProperties: { inherited: true }
     }), 'secret');
 
+    const inheritedPartials = Object.create({
+      ghost() {
+        return 'bad';
+      }
+    });
+    const inheritedPartialTemplate = template({
+      main(container, context, helpers, partials, data) {
+        return container.invokePartial(undefined, context, {
+          name: 'ghost',
+          data,
+          partials: inheritedPartials
+        });
+      },
+      usePartial: true,
+      useData: true
+    }, hb);
+    assert.throws(
+      () => inheritedPartialTemplate({}),
+      /The partial ghost could not be found/
+    );
+
+    const inheritedPartialBlockData = Object.create({
+      'partial-block'() {
+        return 'bad';
+      }
+    });
+    const inheritedPartialBlockTemplate = template({
+      main(container, context, helpers, partials) {
+        return container.invokePartial(undefined, context, {
+          name: '@partial-block',
+          data: inheritedPartialBlockData,
+          partials
+        });
+      },
+      usePartial: true
+    }, hb);
+    assert.throws(
+      () => inheritedPartialBlockTemplate({}),
+      /The partial @partial-block could not be found/
+    );
+
     const ast = hb.parse('{{value}}');
     assert.equal(ast.type, 'Program');
     assert.match(hb.precompile('{{value}}'), /main/);
