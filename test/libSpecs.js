@@ -167,6 +167,13 @@ describe('lib helpers', () => {
       assert.deepEqual(hb.getLocalTemplateOptions(locals), { x: 1 });
     });
 
+    it('ignores prototype-inherited local template options', () => {
+      const hb = hbs.create();
+      const locals = Object.create({ _templateOptions: { noEscape: true } });
+
+      assert.deepEqual(hb.getLocalTemplateOptions(locals), {});
+    });
+
     it('rejects invalid locals for local template options', () => {
       const hb = hbs.create();
       assert.throws(() => hb.updateLocalTemplateOptions(null, { x: 1 }), /locals must be an object/);
@@ -615,6 +622,35 @@ describe('lib helpers', () => {
             { cache: true, layout: layoutFile },
             viewsB
           ),
+          /does not reside in/
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('cacheLayout avoids newline-delimited cache key collisions', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-key-collision-'));
+      const firstRoot = tempRoot;
+      const secondRootPrefix = path.join(tempRoot, 'rootB.hbs');
+      const firstLayoutFile = `${path.join(tempRoot, 'layout.hbs')}\n${secondRootPrefix}`;
+      const secondLayoutFile = path.join(tempRoot, 'layout.hbs');
+      const secondRoot = `${secondRootPrefix}\n${firstRoot}`;
+
+      await fs.mkdir(path.dirname(firstLayoutFile), { recursive: true });
+      await fs.mkdir(secondRoot, { recursive: true });
+      await fs.writeFile(firstLayoutFile, 'first', 'utf8');
+      await fs.writeFile(secondLayoutFile, 'second', 'utf8');
+
+      try {
+        hb.express({ extname: '.hbs' });
+
+        const firstLayouts = await hb._cacheLayout(firstLayoutFile, true, firstRoot, firstRoot);
+        assert.equal(firstLayouts[0]({}), 'first');
+
+        await assert.rejects(
+          hb._cacheLayout(secondLayoutFile, true, secondRoot, secondRoot),
           /does not reside in/
         );
       } finally {

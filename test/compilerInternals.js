@@ -66,6 +66,21 @@ describe('compiler internals', () => {
     );
   });
 
+  it('ignores prototype-polluted compile option defaults', () => {
+    Object.defineProperty(Object.prototype, 'noEscape', {
+      configurable: true,
+      value: true
+    });
+
+    try {
+      const hb = handlebars.create();
+      assert.equal(hb.compile('{{value}}')({ value: '<b>' }), '&lt;b&gt;');
+      assert.match(precompile('{{value}}'), /escapeExpression/);
+    } finally {
+      delete Object.prototype.noEscape;
+    }
+  });
+
   it('covers helper resolution, partial compilation options, and decorator paths', () => {
     const hb = handlebars.create();
     hb.registerHelper('echo', value => value);

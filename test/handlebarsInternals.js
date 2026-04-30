@@ -10,7 +10,7 @@ import {
 import { wrapHelper } from '#handlebars/internal/wrapHelper';
 import logger from '#handlebars/logger';
 import { template } from '#handlebars/runtime';
-import { createFrame } from '#handlebars/utils';
+import { createFrame, escapeExpression } from '#handlebars/utils';
 import { afterEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
 
@@ -225,6 +225,67 @@ describe('handlebars unit internals', () => {
     assert.equal(frame.inherited, undefined);
     assert.equal(frame._parent, source);
     assert.equal(emptyFrame._parent, null);
+  });
+
+  it('does not trust prototype-inherited toHTML when escaping', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+
+    Object.defineProperty(Object.prototype, 'toHTML', {
+      configurable: true,
+      writable: true,
+      value() {
+        return payload;
+      }
+    });
+
+    try {
+      assert.equal(escapeExpression({}), '[object Object]');
+      assert.equal(handlebars.compile('{{value}}')({ value: {} }), '[object Object]');
+      assert.equal(escapeExpression(new handlebars.SafeString(payload)), payload);
+    } finally {
+      delete Object.prototype.toHTML;
+    }
+  });
+
+  it('creates render data roots despite polluted object prototypes', () => {
+    Object.defineProperty(Object.prototype, 'root', {
+      configurable: true,
+      value: { name: 'polluted' }
+    });
+    Object.defineProperty(Object.prototype, '_parent', {
+      configurable: true,
+      value: { name: 'polluted-parent' }
+    });
+
+    try {
+      assert.equal(handlebars.compile('{{@root.name}}')({ name: 'safe' }), 'safe');
+
+      const source = { own: 'value' };
+      const frame = createFrame(source);
+      assert.equal(Object.getPrototypeOf(frame), null);
+      assert.equal(frame.own, 'value');
+      assert.equal(frame._parent, source);
+    } finally {
+      delete Object.prototype.root;
+      delete Object.prototype._parent;
+    }
+  });
+
+  it('ignores prototype-polluted runtime option defaults', () => {
+    Object.defineProperty(Object.prototype, 'allowProtoPropertiesByDefault', {
+      configurable: true,
+      value: true
+    });
+
+    try {
+      logger.log = () => {};
+      const context = {
+        child: Object.create({ secret: 'polluted' })
+      };
+      assert.equal(handlebars.compile('{{child.secret}}')(context, {}), '');
+    } finally {
+      delete Object.prototype.allowProtoPropertiesByDefault;
+    }
   });
 
   it('wraps helpers without changing non-functions or call semantics', () => {
