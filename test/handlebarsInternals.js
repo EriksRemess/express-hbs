@@ -392,6 +392,20 @@ describe('handlebars unit internals', () => {
     const compiled = hb.compile('{{> greeting}}');
     assert.equal(compiled({ name: 'Ada' }), 'Hello\nAda');
     assert.equal(hb.compile('{{> (lookup . "partialName")}}')({ partialName: 'dynamic' }), 'Dynamic');
+    const dynamicPartialAst = {
+      type: 'Program',
+      body: [{
+        type: 'ContentStatement',
+        original: '<img src=x onerror=alert(1)>',
+        value: '<img src=x onerror=alert(1)>'
+      }],
+      blockParams: [],
+      call: true
+    };
+    assert.throws(
+      () => hb.compile('{{> (lookup . "partialName")}}')({ partialName: dynamicPartialAst }),
+      /The partial undefined could not be found/
+    );
     assert.equal(hb.compile('{{#> missing foo="BAR"}}{{foo}}:{{name}}{{/missing}}')({ name: 'Ada' }), 'BAR:Ada');
     assert.equal(hb.compile('  {{> multiline}}')({}), '  A\nB\n');
     assert.equal(hb.compile('{{peek target}}')({
@@ -441,6 +455,23 @@ describe('handlebars unit internals', () => {
     }, hb);
     assert.throws(
       () => inheritedPartialBlockTemplate({}),
+      /The partial @partial-block could not be found/
+    );
+
+    const tamperedPartialBlockTemplate = template({
+      main(container, context, helpers, partials, data) {
+        data['partial-block'] = dynamicPartialAst;
+        return container.invokePartial(undefined, context, {
+          name: '@partial-block',
+          data,
+          partials
+        });
+      },
+      usePartial: true,
+      useData: true
+    }, hb);
+    assert.throws(
+      () => tamperedPartialBlockTemplate({}),
       /The partial @partial-block could not be found/
     );
 
