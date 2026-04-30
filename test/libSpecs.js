@@ -629,6 +629,47 @@ describe('lib helpers', () => {
       }
     });
 
+    it('cacheLayout reads the layout path that passed symlink validation', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-symlink-race-'));
+      const allowedRoot = path.join(tempRoot, 'allowed');
+      const outsideRoot = path.join(tempRoot, 'outside');
+      const safeFile = path.join(allowedRoot, 'safe.hbs');
+      const outsideFile = path.join(outsideRoot, 'outside.hbs');
+      const symlinkFile = path.join(allowedRoot, 'link.hbs');
+      const originalRealpath = fs.realpath;
+      let swapped = false;
+
+      await fs.mkdir(allowedRoot, { recursive: true });
+      await fs.mkdir(outsideRoot, { recursive: true });
+      await fs.writeFile(safeFile, '<safe>{{{body}}}</safe>', 'utf8');
+      await fs.writeFile(outsideFile, '<outside>{{{body}}}</outside>', 'utf8');
+      await fs.symlink(safeFile, symlinkFile);
+
+      fs.realpath = async (...args) => {
+        const resolved = await originalRealpath(...args);
+        if (!swapped && path.resolve(args[0]) === symlinkFile) {
+          swapped = true;
+          await fs.rm(symlinkFile);
+          await fs.symlink(outsideFile, symlinkFile);
+        }
+        return resolved;
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          restrictLayoutsTo: allowedRoot
+        });
+
+        const layouts = await hb.cacheLayout(path.join(allowedRoot, 'link'), false);
+        assert.equal(layouts[0]({ body: 'body' }), '<safe>body</safe>');
+      } finally {
+        fs.realpath = originalRealpath;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     it('cacheLayout does not reuse cached layouts across different allowed roots', async () => {
       const hb = hbs.create();
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-root-scope-'));
@@ -1475,6 +1516,21 @@ describe('lib helpers', () => {
       assert.equal(
         await hb._renderFile('/tmp/inline.hbs', '{{later "x"}}!', {}),
         'async:x!'
+      );
+    });
+
+    it('keeps async helpers on the internal resolver cache when context shadows it', async () => {
+      const hb = hbs.create();
+      hb.express({});
+      hb.registerAsyncHelper('later', async (value) => `<${value}>`);
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{#with item}}{{later "x"}}{{/with}}', {
+          item: {
+            resolverCache: Object.create(null)
+          }
+        }),
+        '&lt;x&gt;'
       );
     });
 

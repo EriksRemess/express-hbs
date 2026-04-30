@@ -426,6 +426,28 @@ describe('compiler internals', () => {
         () => compile(inheritedValueAst, {}, hb)({}),
         /Invalid AST: ContentStatement\.value must be an own property/
       );
+
+      const inheritedPathAst = program({
+        type: 'MustacheStatement',
+        params: [],
+        hash: null,
+        escaped: true,
+        strip: { open: false, close: false }
+      });
+      Object.setPrototypeOf(inheritedPathAst.body[0], {
+        path: {
+          type: 'PathExpression',
+          data: false,
+          depth: '0)); globalThis.__expressHbsAstInjectionProbe = true; //',
+          parts: ['name'],
+          original: 'name'
+        }
+      });
+      assert.throws(
+        () => compile(inheritedPathAst, { compat: true }, hb)({ name: 'safe' }),
+        /Invalid AST: MustacheStatement\.path must be an own property/
+      );
+      assert.equal(globalThis.__expressHbsAstInjectionProbe, false);
     } finally {
       delete globalThis.__expressHbsAstInjectionProbe;
       delete Object.prototype.type;
