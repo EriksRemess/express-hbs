@@ -69,6 +69,7 @@ describe('handlebars unit internals', () => {
 
     assert.equal(resultIsAllowed('value', custom, 'allowedProp'), true);
     assert.equal(resultIsAllowed(() => {}, custom, 'anyMethod'), true);
+    assert.equal(resultIsAllowed(() => {}, custom, '__lookupSetter__'), false);
 
     const env = new HandlebarsEnvironment();
     env.resetLoggedPropertyAccesses();

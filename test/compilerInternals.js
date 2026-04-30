@@ -50,7 +50,7 @@ describe('compiler internals', () => {
     );
 
     const childTemplate = compile('{{#if ok}}yes{{/if}}', {}, hb);
-    const child = childTemplate._child(1, {});
+    const child = childTemplate._child(0, {});
     assert.equal(typeof child, 'function');
     assert.equal(child({}, { data: {} }), 'yes');
 
@@ -93,6 +93,10 @@ describe('compiler internals', () => {
 
     assert.equal(hb.compile('{{#*inline "p"}}In{{/inline}}{{> p}}')({}), 'In');
     assert.equal(hb.compile('{{#> layout}}Body{{/layout}}')({}), '<div>Body</div>');
+    assert.throws(
+      () => hb.compile('{{*missing}}')({}),
+      /Missing decorator: "missing"/
+    );
     assert.equal(hb.compile('{{> (lookup . "which")}}')({ which: 'greeting' }), 'Hello');
   });
 
@@ -137,6 +141,19 @@ describe('compiler internals', () => {
     assert.throws(
       () => hb.compile('{{#if user.name}}yes{{/if}}', { assumeObjects: true })({}),
       /Cannot read properties of undefined/
+    );
+
+    let getterCalls = 0;
+    const root = { child: {} };
+    Object.defineProperty(root, 'changing', {
+      get() {
+        getterCalls += 1;
+        return getterCalls === 1 ? 'first' : 'second';
+      }
+    });
+    assert.equal(
+      hb.compile('{{#with child}}{{changing}}{{/with}}', { compat: true })(root),
+      'first'
     );
 
     assert.throws(
@@ -277,6 +294,74 @@ describe('compiler internals', () => {
       () => compile(badAst, {}, hb)({}),
       /Unknown type: Nope/
     );
+  });
+
+  it('rejects type-confused input AST values before code generation', () => {
+    const hb = handlebars.create();
+
+    const maliciousNumberAst = program({
+      type: 'MustacheStatement',
+      path: pathExpression('inspect'),
+      params: [
+        {
+          type: 'NumberLiteral',
+          value: '0); throw new Error("AST injection"); //',
+          original: 0
+        }
+      ],
+      hash: null,
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    assert.throws(
+      () => precompile(maliciousNumberAst),
+      /Invalid AST: NumberLiteral\.value must be a number/
+    );
+
+    const badDepthAst = program({
+      type: 'MustacheStatement',
+      path: {
+        type: 'PathExpression',
+        data: false,
+        depth: '0)); throw new Error("AST injection"); //',
+        parts: ['name'],
+        original: 'name'
+      },
+      params: [],
+      hash: null,
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    assert.throws(
+      () => compile(badDepthAst, {}, hb)({}),
+      /Invalid AST: PathExpression\.depth must be an integer/
+    );
+
+    const badPartsAst = program({
+      type: 'MustacheStatement',
+      path: {
+        type: 'PathExpression',
+        data: false,
+        depth: 0,
+        parts: ['safe', 1],
+        original: 'safe'
+      },
+      params: [],
+      hash: null,
+      escaped: true,
+      strip: { open: false, close: false }
+    });
+    assert.throws(
+      () => compile(badPartsAst, {}, hb)({}),
+      /Invalid AST: PathExpression\.parts must only contain strings/
+    );
+  });
+
+  it('uses contiguous child program indices in compiled specs', () => {
+    const spec = precompile('{{#if a}}A{{else if b}}B{{else}}C{{/if}}');
+
+    assert.match(spec, /"0":function/);
+    assert.match(spec, /container\.program\(0,/);
   });
 
   it('applies whitespace control for standalone and inline strip cases', () => {
