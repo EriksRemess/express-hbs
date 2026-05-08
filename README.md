@@ -4,13 +4,20 @@ Express handlebars template engine with multiple layouts, blocks and cached part
 
 ## Fork Notice
 
-This project is an update of the original `express-hbs`, focused on latest Node.js LTS and Express 5 compatibility.
+This project is an update of the original `express-hbs`, focused on Node.js 26.1+ and Express 5 compatibility.
 
 - Original project: https://github.com/TryGhost/express-hbs
 - Fork (this project): https://github.com/EriksRemess/express-hbs
 - npm package name: `@eriks/express-hbs`
 
 All credit for the engine design and original implementation goes to the original `express-hbs` developers and contributors.
+
+## Requirements
+
+- Node.js 26.1.0 or newer.
+- Express 5.
+
+Node.js 26 is a Current release before its planned LTS transition in October 2026.
 
 ## v2.0.0
 
@@ -150,6 +157,26 @@ Layouts can be nested: just include a declarative layout tag within any layout
 template to have its content included in the declared "parent" layout.  Be
 aware that too much nesting can impact performances, and stay away from
 infinite loops!
+
+## Render cancellation
+
+Render options may include an `AbortSignal`. Template, layout, and partial filesystem reads and stats will observe the signal.
+
+```js
+app.get('/page', (req, res, next) => {
+  res.render('page', {
+    title: 'Page',
+    signal: req.signal
+  }, (err, html) => {
+    if (err) {
+      next(err);
+      return;
+    }
+
+    res.send(html);
+  });
+});
+```
 
 ## Helpers
 
@@ -342,6 +369,10 @@ Rebuild declarations from scratch:
 Install dependencies and run:
 
     npm install
+    npm run ci
+
+For the quick test-and-lint path:
+
     npm test
 
 

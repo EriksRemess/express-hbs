@@ -6,13 +6,12 @@ export default class SafeString {
      * @param {unknown} string
      */
     constructor(string: unknown);
+    /** @type {unknown} */
     string: unknown;
+    /** @type {() => string} */
+    toHTML: () => string;
     /**
      * @returns {string}
      */
     toString(): string;
-    /**
-     * @returns {string}
-     */
-    toHTML(): string;
 }

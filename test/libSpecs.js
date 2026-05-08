@@ -499,24 +499,32 @@ describe('lib helpers', () => {
       assert.equal(hb.partialsManifest.length > 0, true);
     });
 
-    it('falls back when fs.glob does not support withFileTypes', async () => {
+    it('lists partials without following symlinks', async () => {
       const hb = hbs.create();
       const originalGlob = fs.glob;
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-glob-options-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      let globOptions;
 
-      fs.glob = async function* () {
-        throw new TypeError('fs.glob does not support options.withFileTypes yet. Please open an issue on GitHub.');
+      await fs.mkdir(partialsDir, { recursive: true });
+
+      fs.glob = async function* (_pattern, options) {
+        globOptions = options;
       };
 
       try {
         hb.express({
-          partialsDir: path.join(issuesDir, '23/partials'),
+          partialsDir,
           extname: '.hbs'
         });
 
         await hb.cachePartials();
-        assert.equal(hb.partialsManifest.length > 0, true);
+        assert.equal(globOptions.cwd, partialsDir);
+        assert.equal(globOptions.followSymlinks, false);
+        assert.equal(globOptions.withFileTypes, true);
       } finally {
         fs.glob = originalGlob;
+        await fs.rm(tempRoot, { recursive: true, force: true });
       }
     });
 
@@ -1575,6 +1583,11 @@ describe('lib helpers', () => {
         /views entries must be non-empty strings/
       );
 
+      await assert.rejects(
+        hb._renderFile(path.join(issuesDir, '23/index.hbs'), null, { signal: {} }),
+        /render options signal must be an AbortSignal/
+      );
+
       assert.equal(
         await hb._renderFile('/tmp/inline.hbs', 'ok', {
           settings: Object.create({ views: [''] })
@@ -1586,6 +1599,47 @@ describe('lib helpers', () => {
         () => hb.___express(path.join(issuesDir, '23/index.hbs'), {}, {}),
         /Render callback must be a function/
       );
+    });
+
+    it('honors aborted render signals before rendering', async () => {
+      const hb = hbs.create();
+      const controller = new AbortController();
+      hb.express({});
+
+      controller.abort(new Error('render stopped'));
+
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', 'ok', { signal: controller.signal }),
+        /render stopped/
+      );
+    });
+
+    it('passes render signals through template reads', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-render-signal-'));
+      const templateFile = path.join(tempRoot, 'index.hbs');
+      const controller = new AbortController();
+      const originalReadFile = fs.readFile;
+      let seenSignal;
+
+      await fs.writeFile(templateFile, 'ok', 'utf8');
+
+      fs.readFile = async function(filename, options) {
+        seenSignal = options.signal;
+        return originalReadFile.call(this, filename, options);
+      };
+
+      try {
+        hb.express({});
+        assert.equal(
+          await hb._renderFile(templateFile, null, { signal: controller.signal }),
+          'ok'
+        );
+        assert.equal(seenSignal, controller.signal);
+      } finally {
+        fs.readFile = originalReadFile;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
 
     it('reports a clear safe-root error for options.layout without viewsDir', async () => {

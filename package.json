@@ -35,7 +35,9 @@
   "scripts": {
     "lint": "eslint --ext .js --cache lib test example",
     "test": "node --test test/*.js",
+    "test:random": "node --test --test-randomize test/*.js",
     "posttest": "npm run lint",
+    "ci": "npm test && npm run lint && npm run test:random && npm run types:build && npm run coverage",
     "types:clean": "rm -rf types",
     "types:build": "tsc -p tsconfig.types.json && mkdir -p types/lib && cp lib/handlebars.d.ts types/lib/handlebars.d.ts",
     "types:rebuild": "npm run types:clean && npm run types:build",
@@ -56,7 +58,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=24"
+    "node": ">=26.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",

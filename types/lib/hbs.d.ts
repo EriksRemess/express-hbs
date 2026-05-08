@@ -39,9 +39,7 @@ declare class ExpressHbs {
         escapeExpression(value: unknown): string;
     };
     cwd: string;
-    _options: {
-        templateOptions: {};
-    };
+    _options: any;
     hasGlobalTemplateOptions: boolean;
     cache: Map<any, any>;
     defaultLayoutTemplates: Function[];
@@ -166,25 +164,30 @@ declare class ExpressHbs {
      *
      * @param {string} layoutFile
      * @param {string | undefined} allowedRoot
-     * @returns {void}
+     * @returns {Promise<string>}
      */
-    _ensureLayoutWithinRoot(layoutFile: string, allowedRoot: string | undefined): void;
+    _ensureLayoutWithinRoot(layoutFile: string, allowedRoot: string | undefined): Promise<string>;
     /**
      * Validates that a layout path is inside `restrictLayoutsTo`, when configured.
      *
      * @param {string} layoutFile
-     * @returns {void}
+     * @returns {Promise<string | undefined>}
      */
-    _ensureInRestrictLayoutsTo(layoutFile: string): void;
+    _ensureInRestrictLayoutsTo(layoutFile: string): Promise<string | undefined>;
     /**
      * Loads and compiles a layout and its parent chain.
      *
      * @param {string} layoutFile
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
+     * @param {string | undefined} [allowedRoot]
+     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal }} [context]
      * @returns {Promise<Function[]>}
      */
-    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: any, seenLayouts?: Set<any>): Promise<Function[]>;
+    _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: string | undefined, context?: {
+        seenLayouts?: Set<string>;
+        signal?: AbortSignal;
+    }): Promise<Function[]>;
     /**
      * Callback/Promise wrapper for layout caching.
      *
@@ -199,9 +202,10 @@ declare class ExpressHbs {
      * Discovers and compiles partials from configured directories.
      *
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<boolean>}
      */
-    _cachePartials(viewsDir: string | string[]): Promise<boolean>;
+    _cachePartials(viewsDir: string | string[], signal?: AbortSignal): Promise<boolean>;
     /**
      * Callback/Promise wrapper for partial caching.
      *
@@ -241,9 +245,10 @@ declare class ExpressHbs {
      *
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<Function[] | null>}
      */
-    _loadDefaultLayout(useCache: boolean, viewsDir: string | string[]): Promise<Function[] | null>;
+    _loadDefaultLayout(useCache: boolean, viewsDir: string | string[], signal?: AbortSignal): Promise<Function[] | null>;
     /**
      * Callback/Promise wrapper for default layout loading.
      *
@@ -354,9 +359,10 @@ declare class ExpressHbs {
      *
      * @param {string} filename
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<{ compiled: Function, parentLayoutFile: string | undefined }>}
      */
-    _getUncachedLayoutInfo(filename: string, viewsDir: string | string[]): Promise<{
+    _getUncachedLayoutInfo(filename: string, viewsDir: string | string[], signal?: AbortSignal): Promise<{
         compiled: Function;
         parentLayoutFile: string | undefined;
     }>;
@@ -365,9 +371,10 @@ declare class ExpressHbs {
      *
      * @param {string} filename
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
      */
-    _getUncachedTemplateInfo(filename: string, viewsDir: string | string[]): Promise<{
+    _getUncachedTemplateInfo(filename: string, viewsDir: string | string[], signal?: AbortSignal): Promise<{
         type: "template";
         source: string;
         template: Function;
@@ -381,9 +388,10 @@ declare class ExpressHbs {
      * @param {string | null} source
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
      */
-    _getSourceTemplate(filename: string, source: string | null, useCache: boolean, viewsDir: string | string[]): Promise<{
+    _getSourceTemplate(filename: string, source: string | null, useCache: boolean, viewsDir: string | string[], signal?: AbortSignal): Promise<{
         type: "template";
         source: string;
         template: Function;
@@ -397,12 +405,13 @@ declare class ExpressHbs {
      * @param {{ declaredLayout?: string, declaredLayoutFile?: string }} templateInfo
      * @param {AnyObject} options
      * @param {string | string[]} viewsDir
+     * @param {AbortSignal} [signal]
      * @returns {Promise<Function[] | null>}
      */
     _resolveLayoutTemplates(filename: string, templateInfo: {
         declaredLayout?: string;
         declaredLayoutFile?: string;
-    }, options: AnyObject, viewsDir: string | string[]): Promise<Function[] | null>;
+    }, options: AnyObject, viewsDir: string | string[], signal?: AbortSignal): Promise<Function[] | null>;
     /**
      * Updates replacement entries for a subset of async placeholders.
      *
@@ -449,10 +458,12 @@ declare class ExpressHbs {
      *
      * @param {string} filename
      * @param {string | null} source
-     * @param {AnyObject} options
+     * @param {AnyObject & { signal?: AbortSignal }} options
      * @returns {Promise<string>}
      */
-    _renderFile(filename: string, source: string | null, options: AnyObject): Promise<string>;
+    _renderFile(filename: string, source: string | null, options: AnyObject & {
+        signal?: AbortSignal;
+    }): Promise<string>;
     /**
      * Express view-engine entry point.
      *
