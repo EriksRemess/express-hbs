@@ -44,6 +44,22 @@ describe('lib helpers', () => {
       assert.equal(values[id], 'resolved');
     });
 
+    it('should reuse a per-cache random prefix for resolver ids', async () => {
+      const cache = new Map();
+      const firstId = resolve(cache, (_, cb) => cb('first'));
+      const secondId = resolve(cache, (_, cb) => cb('second'));
+      const firstHex = firstId.match(/^__aSyNcId__<_([a-f0-9]{32})__$/)[1];
+      const secondHex = secondId.match(/^__aSyNcId__<_([a-f0-9]{32})__$/)[1];
+
+      assert.equal(firstHex.slice(0, 16), secondHex.slice(0, 16));
+      assert.equal(firstHex.slice(16), '0000000000000000');
+      assert.equal(secondHex.slice(16), '0000000000000001');
+
+      const values = await done(cache);
+      assert.equal(values[firstId], 'first');
+      assert.equal(values[secondId], 'second');
+    });
+
     it('should reject when resolver callback throws', async () => {
       const cache = Object.create(null);
       resolve(cache, () => {
@@ -82,12 +98,12 @@ describe('lib helpers', () => {
         const directPromise = Promise.resolve('done');
         queuedCache.set(directId, directPromise);
         queuedCache[resolverPendingEntriesKey].push([queuedId, Promise.resolve('ignored')]);
-        queuedCache[resolverPendingEntriesKey].push([directId, directPromise]);
+        queuedCache[resolverPendingEntriesKey].push(directId, directPromise);
         return directId;
       });
 
       queuedCache.set(queuedId, queuedPromise);
-      queuedCache[resolverPendingEntriesKey].push([queuedId, queuedPromise]);
+      queuedCache[resolverPendingEntriesKey].push(queuedId, queuedPromise);
 
       assert.equal(await hb._resolveAsyncHtml(queuedCache, queuedId), 'done');
 

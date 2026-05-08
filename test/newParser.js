@@ -702,6 +702,9 @@ test('helpers can access the current partial name', () => {
 test('escaped output replaces forbidden code points', () => {
   const template = handlebars.compile('{{name}}');
   assert.equal(template({ name: 'A\u0002B' }), 'A\uFFFDB');
+  assert.equal(template({ name: 'A\uD800B' }), 'A\uFFFDB');
+  assert.equal(template({ name: 'A\uFFFFB' }), 'A\uFFFDB');
+  assert.equal(template({ name: 'A\u{1F600}B' }), 'A\u{1F600}B');
 });
 
 test('templates containing NULL characters still compile and render', () => {

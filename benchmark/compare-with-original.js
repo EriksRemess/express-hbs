@@ -55,6 +55,7 @@ const itemCount = Number.parseInt(process.env.BENCH_ITEMS ?? String(selectedScen
 const rounds = Number.parseInt(process.env.BENCH_ROUNDS ?? String(selectedProfile.rounds), 10);
 const showRawSamples = process.env.BENCH_SHOW_RAW === '1';
 const jsonOutputPath = process.env.BENCH_JSON_PATH ?? '';
+const nowInstantString = () => globalThis.Temporal.Now.instant().toString();
 
 if (!Number.isInteger(iterations) || iterations <= 0) {
   throw new Error(`BENCH_ITERATIONS must be a positive integer, got: ${process.env.BENCH_ITERATIONS}`);
@@ -202,10 +203,7 @@ function aggregateResults(samples) {
 
   for (const sample of samples) {
     const key = `${sample.engine}|${sample.mode}`;
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
-    }
-    grouped.get(key).push(sample);
+    grouped.getOrInsertComputed(key, () => []).push(sample);
   }
 
   const aggregates = [];
@@ -314,7 +312,7 @@ async function main() {
 
   if (jsonOutputPath) {
     const report = {
-      generatedAt: new Date().toISOString(),
+      generatedAt: nowInstantString(),
       runtime,
       settings: {
         scenario: selectedScenarioName,
