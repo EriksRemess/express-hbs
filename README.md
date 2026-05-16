@@ -4,7 +4,7 @@ Express handlebars template engine with multiple layouts, blocks and cached part
 
 ## Fork Notice
 
-This project is an update of the original `express-hbs`, focused on Node.js 26.1+ and Express 5 compatibility.
+This project is an update of the original `express-hbs`, focused on Node.js 26+ and Express 5 compatibility.
 
 - Original project: https://github.com/TryGhost/express-hbs
 - Fork (this project): https://github.com/EriksRemess/express-hbs
@@ -14,7 +14,7 @@ All credit for the engine design and original implementation goes to the origina
 
 ## Requirements
 
-- Node.js 26.1.0 or newer.
+- Node.js 26.0.0 or newer.
 - Express 5.
 
 Node.js 26 is a Current release before its planned LTS transition in October 2026.
@@ -34,44 +34,71 @@ If you're upgrading from v0.8.4 to v1.0.0 there are some potentially breaking ch
 
 ## Usage
 
-To use with Express 5.
+To use with Express 5:
+
 ```js
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import { fileURLToPath } from 'node:url';
 import hbs from '@eriks/express-hbs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const viewsDir = path.join(__dirname, 'views');
 
 // Use `.hbs` for extensions and find partials in `views/partials`.
 app.engine('hbs', hbs.express({
-  partialsDir: path.join(__dirname, 'views/partials')
+  partialsDir: path.join(viewsDir, 'partials')
 }));
 app.set('view engine', 'hbs');
-app.set('views', path.join(__dirname, 'views'));
+app.set('views', viewsDir);
 ```
-Options for `#express`
+
+Common options for `hbs.express()`:
 
 ```js
 hbs.express({
-  partialsDir: "{String/Array} [Required] Path to partials templates, one or several directories",
+  // Template and partial file extension. Defaults to `.hbs`.
+  extname: '.hbs',
 
-  // OPTIONAL settings
-  restrictLayoutsTo: "{String} Absolute path to a directory to restrict layout directive reading from",
-  blockHelperName: "{String} Override 'block' helper name.",
-  contentHelperName: "{String} Override 'contentFor' helper name.",
-  defaultLayout: "{String} Absolute path to default layout template",
-  extname: "{String} Extension for templates & partials, defaults to `.hbs`",
-  handlebars: "{Module} Use external handlebars instead of @eriks/express-hbs dependency",
-  i18n: "{Object} i18n object",
-  layoutsDir: "{String} Path to layout templates",
-  templateOptions: "{Object} options to pass to template()",
+  // One or more partial directories.
+  partialsDir: path.join(viewsDir, 'partials'),
 
-  // override the default compile
-  onCompile: function(exhbs, source, filename) {
-    var options;
-    if (filename && filename.indexOf('partials') > -1) {
-      options = {preventIndent: true};
+  // One or more layout directories.
+  layoutsDir: path.join(viewsDir, 'layout'),
+
+  // View directory fallback for non-Express rendering.
+  viewsDir,
+
+  // Default layout path. Set to false to disable the default layout.
+  defaultLayout: path.join(viewsDir, 'layout/default.hbs'),
+
+  // Re-scan partial directories on each cache pass.
+  refreshPartialsManifest: false,
+
+  // Restrict declarative and programmatic layout reads to a safe root.
+  restrictLayoutsTo: viewsDir,
+
+  // Override helper names.
+  blockHelperName: 'block',
+  contentHelperName: 'contentFor',
+
+  // Use an external Handlebars instance.
+  // handlebars: externalHandlebars,
+
+  // Register `__` and `__n` helpers from an i18n object.
+  // i18n,
+
+  // Options passed to compiled templates.
+  templateOptions: {
+    data: {
+      appName: 'example'
     }
+  },
+
+  // Override the default compiler.
+  onCompile(exhbs, source, filename) {
+    const options = filename?.includes('partials')
+      ? { preventIndent: true }
+      : undefined;
     return exhbs.handlebars.compile(source, options);
   }
 });
@@ -132,7 +159,7 @@ There are three ways to use a layout, listed in precedence order
     });
     ```
 
-    This option also allows for layout suppression (both the default layout and when specified declaratively in a page) by passing in a falsey Javascript value as the value of the `layout` property:
+    This option also allows for layout suppression (both the default layout and when specified declaratively in a page) by passing in a falsy JavaScript value as the value of the `layout` property:
 
     ```js
     res.render('veggies', {
@@ -155,7 +182,7 @@ There are three ways to use a layout, listed in precedence order
 
 Layouts can be nested: just include a declarative layout tag within any layout
 template to have its content included in the declared "parent" layout.  Be
-aware that too much nesting can impact performances, and stay away from
+aware that too much nesting can impact performance, and stay away from
 infinite loops!
 
 ## Render cancellation
@@ -183,29 +210,21 @@ app.get('/page', (req, res, next) => {
 ### Synchronous helpers
 
 ```js
-hbs.registerHelper('link', function(text, options) {
+hbs.registerHelper('link', (text, options) => {
   const isSafeAttrName = (name) => /^[A-Za-z_:][A-Za-z0-9:._-]*$/.test(name);
-  const attrs = [];
-
-  for (const prop in options.hash) {
-    if (!isSafeAttrName(prop)) {
-      continue;
-    }
-
-    attrs.push(
-      prop + '="' + hbs.Utils.escapeExpression(options.hash[prop]) + '"'
-    );
-  }
+  const attrs = Object.entries(options.hash)
+    .filter(([name]) => isSafeAttrName(name))
+    .map(([name, value]) => `${name}="${hbs.Utils.escapeExpression(value)}"`)
+    .join(' ');
 
   const escapedText = hbs.Utils.escapeExpression(text);
-  const attrText = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
-  return new hbs.SafeString(
-    "<a" + attrText + ">" + escapedText + "</a>"
-  );
+  const attrText = attrs ? ` ${attrs}` : '';
+  return new hbs.SafeString(`<a${attrText}>${escapedText}</a>`);
 });
 ```
 
-in markup
+In markup:
+
 ```
 {{{link 'barc.com' href='http://barc.com'}}}
 ```
@@ -213,39 +232,48 @@ in markup
 ### Asynchronous helpers
 
 ```js
-hbs.registerAsyncHelper('readFile', function(filename, cb) {
-  const resolvedPath = path.resolve(viewsDir, filename);
-  fs.realpath(viewsDir, function(baseErr, realViewsDir) {
-    if (baseErr) {
-      cb(new hbs.SafeString(''));
-      return;
+import { readFile, realpath } from 'node:fs/promises';
+import path from 'node:path';
+
+async function readViewFile(filename) {
+  try {
+    const resolvedPath = path.resolve(viewsDir, filename);
+    const [realViewsDir, realResolvedPath] = await Promise.all([
+      realpath(viewsDir),
+      realpath(resolvedPath)
+    ]);
+
+    const relativePath = path.relative(realViewsDir, realResolvedPath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      return '';
     }
 
-    fs.realpath(resolvedPath, function(pathErr, realResolvedPath) {
-      if (pathErr) {
-        cb(new hbs.SafeString(''));
-        return;
-      }
+    return readFile(realResolvedPath, 'utf8');
+  } catch {
+    return '';
+  }
+}
 
-      const relativePath = path.relative(realViewsDir, realResolvedPath);
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        cb(new hbs.SafeString(''));
-        return;
-      }
-
-      fs.readFile(realResolvedPath, 'utf8', function(err, content) {
-        cb(new hbs.SafeString(err ? '' : content));
-      });
-    });
-  });
-});
+hbs.registerAsyncHelper('readFile', async (filename) =>
+  new hbs.SafeString(await readViewFile(filename))
+);
 ```
 
-in markup
+In markup:
+
 ```
 {{{readFile 'tos.txt'}}}
 ```
 
+Callback-style async helpers are still supported for compatibility with the same `readViewFile` helper:
+
+```js
+hbs.registerAsyncHelper('readFile', (filename, cb) => {
+  readViewFile(filename)
+    .then((content) => cb(new hbs.SafeString(content)))
+    .catch(() => cb(new hbs.SafeString('')));
+});
+```
 
 ## i18n support
 
@@ -255,42 +283,43 @@ Express-hbs supports [i18n](https://github.com/mashpie/i18n-node)
 import cookieParser from 'cookie-parser';
 import i18n from 'i18n';
 
-// minimal config
+// Minimal config
 i18n.configure({
-    locales: ['en', 'fr'],
-    cookie: 'locale',
-    directory: path.join(__dirname, 'locales')
+  locales: ['en', 'fr'],
+  cookie: 'locale',
+  directory: path.join(__dirname, 'locales')
 });
 
 app.engine('hbs', hbs.express({
-    // ... options from above
-    i18n: i18n,  // registers __ and __n helpers
+  // ... options from above
+  i18n // registers __ and __n helpers
 }));
 app.set('view engine', 'hbs');
 app.set('views', viewsDir);
 
-// cookies are needed
+// Cookies are needed.
 app.use(cookieParser());
 
-// init i18n module
+// Initialize the i18n middleware.
 app.use(i18n.init);
 ```
 
 ## Engine Instances
 
-Create isolated engine instances with their own cache system and handlebars engine.
+Create isolated engine instances with their own cache system and Handlebars engine.
 
 ```js
 import hbs from '@eriks/express-hbs';
-var instance1 = hbs.create();
-var instance2 = hbs.create();
+
+const instance1 = hbs.create();
+const instance2 = hbs.create();
 ```
 
 ## Template options
 
-The main use case for template options is setting the handlebars "data" object - this creates global template variables accessible with an `@` prefix.
+The main use case for template options is setting the handlebars `data` object. This creates global template variables accessible with an `@` prefix.
 
-Template options can be set in 3 ways. When setting global template options they can be [passed as config on creation of an instance](https://github.com/barc/express-hbs#usage), and they can also be updated used the `updateTemplateOptions(templateOptions)` method of an instance. To set template options for an individual request they can be set on `res.locals` using the helper method `updateLocalTemplateOptions(locals, templateOptions)`.
+Template options can be set in three ways. Global template options can be [passed as config on creation of an instance](#usage), and they can also be updated using the `updateTemplateOptions(templateOptions)` method of an instance. Per-request template options can be set on `res.locals` using `updateLocalTemplateOptions(locals, templateOptions)`.
 
 Per-request local template options are sanitized before render and cannot override Handlebars runtime security controls such as prototype-access settings or `allowCallsToHelperMissing`.
 
@@ -298,14 +327,13 @@ Both of these methods have a companion method `getTemplateOptions()` and `getLoc
 
 ## Example
 
-in File `app.js`
+In file `app.js`
 
 ```js
 // http://expressjs.com/api.html#app.locals
 app.locals({
-    'PROD_MODE': 'production' === app.get('env')
+  PROD_MODE: app.get('env') === 'production'
 });
-
 ```
 
 File `views/layout/default.hbs`
@@ -350,31 +378,39 @@ File `views/index.hbs`
 
 To run example project
 
-    npm install
-    node example/app.js
+```sh
+npm install
+node example/app.js
+```
 
 ## TypeScript declarations
 
 Generate declaration files (`.d.ts`) from JSDoc annotations:
 
-  npm run types:build
+```sh
+npm run types:build
+```
 
 Rebuild declarations from scratch:
 
-  npm run types:rebuild
-
+```sh
+npm run types:rebuild
+```
 
 ## Testing
 
 Install dependencies and run:
 
-    npm install
-    npm run ci
+```sh
+npm install
+npm run ci
+```
 
 For the quick test-and-lint path:
 
-    npm test
-
+```sh
+npm test
+```
 
 ## Credits
 
