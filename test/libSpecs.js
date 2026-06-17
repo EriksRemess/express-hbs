@@ -17,6 +17,17 @@ const resolveCache = (cache) => new Promise((resolve, reject) => done(cache, (er
   }
   resolve(values);
 }));
+const addThrowingUnsafeGetters = (target) => {
+  for (const unsafeKey of ['__proto__', 'constructor', 'prototype']) {
+    Object.defineProperty(target, unsafeKey, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('unsafe getter evaluated');
+      }
+    });
+  }
+};
 
 describe('lib helpers', () => {
   const issuesDir = fromHere(import.meta.url, 'issues');
@@ -212,6 +223,29 @@ describe('lib helpers', () => {
       assert.throws(() => hb.updateLocalTemplateOptions(null, { x: 1 }), /locals must be an object/);
     });
 
+    it('defines local template options as own data properties despite polluted prototypes', () => {
+      const hb = hbs.create();
+      const locals = {};
+      let setterCalls = 0;
+
+      Object.defineProperty(Object.prototype, '_templateOptions', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        }
+      });
+
+      try {
+        const templateOptions = hb.updateLocalTemplateOptions(locals, { data: { ok: true } });
+
+        assert.equal(setterCalls, 0);
+        assert.equal(Object.hasOwn(locals, '_templateOptions'), true);
+        assert.equal(locals._templateOptions, templateOptions);
+      } finally {
+        delete Object.prototype._templateOptions;
+      }
+    });
+
     it('covers merge branches for arrays, nested objects and unsafe keys', () => {
       const hb = hbs.create();
       hb.updateTemplateOptions({
@@ -240,6 +274,27 @@ describe('lib helpers', () => {
       assert.deepEqual(result.templateOptions.nested, { a: 1, b: 2 });
       assert.equal(result.localsArg._templateOptions, undefined);
       assert.equal({}.pollute, undefined);
+    });
+
+    it('does not read unsafe option-key accessors while cloning options', async () => {
+      const hb = hbs.create();
+      const engineOptions = { templateOptions: { data: { ok: true } } };
+      const renderOptions = {};
+      const localTemplateOptions = { data: {} };
+
+      addThrowingUnsafeGetters(engineOptions);
+      addThrowingUnsafeGetters(renderOptions);
+      addThrowingUnsafeGetters(localTemplateOptions.data);
+
+      hb.express(engineOptions);
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{@ok}}!', renderOptions),
+        'true!'
+      );
+      assert.deepEqual(hb.updateLocalTemplateOptions({}, localTemplateOptions), {
+        data: {}
+      });
     });
 
     it('strips security-sensitive keys from local template options', () => {
@@ -329,6 +384,34 @@ describe('lib helpers', () => {
 
       assert.throws(() => hb._renderTemplate(template, locals), /\[x\.hbs\] boom/);
       assert.deepEqual(locals._templateOptions, { x: 1 });
+    });
+
+    it('restores hidden template options without invoking polluted prototype setters', () => {
+      const hb = hbs.create();
+      const locals = {
+        _templateOptions: { data: { ok: true } }
+      };
+      const template = () => 'ok';
+      let setterCalls = 0;
+
+      template.isTop = true;
+      template.__filename = 'x.hbs';
+
+      Object.defineProperty(Object.prototype, '_templateOptions', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        }
+      });
+
+      try {
+        assert.equal(hb._renderTemplate(template, locals), 'ok');
+        assert.equal(setterCalls, 0);
+        assert.equal(Object.hasOwn(locals, '_templateOptions'), true);
+        assert.deepEqual(locals._templateOptions, { data: { ok: true } });
+      } finally {
+        delete Object.prototype._templateOptions;
+      }
     });
 
     it('sanitizes template options written through updateLocalTemplateOptions', () => {
@@ -1760,6 +1843,41 @@ describe('lib helpers', () => {
         /layout failed/
       );
       assert.equal(locals.body, 'original');
+    });
+
+    it('renders layout body without invoking polluted prototype setters', () => {
+      const hb = hbs.create();
+      const locals = {};
+      const template = () => 'inner';
+      let layoutSawOwnBody = false;
+      let setterCalls = 0;
+
+      template.__filename = 'template.hbs';
+
+      const layout = (layoutLocals) => {
+        layoutSawOwnBody = Object.hasOwn(layoutLocals, 'body');
+        return `<layout>${layoutLocals.body}</layout>`;
+      };
+      layout.__filename = 'layout.hbs';
+
+      Object.defineProperty(Object.prototype, 'body', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        }
+      });
+
+      try {
+        assert.equal(
+          hb._renderWithLayouts(template, locals, [layout]),
+          '<layout>inner</layout>'
+        );
+        assert.equal(layoutSawOwnBody, true);
+        assert.equal(setterCalls, 0);
+        assert.equal(Object.hasOwn(locals, 'body'), false);
+      } finally {
+        delete Object.prototype.body;
+      }
     });
 
     it('does not treat literal async id prefixes as unresolved helpers', async () => {
