@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2024",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@eriks/express-hbs": [
+        "types/lib/hbs.d.ts"
+      ]
+    },
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "test/types/**/*.ts"
+  ]
+}

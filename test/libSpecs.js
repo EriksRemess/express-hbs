@@ -558,6 +558,32 @@ describe('lib helpers', () => {
       assert.throws(() => hb.express({ blockHelperName: {} }), /blockHelperName must be a non-empty string/);
     });
 
+    it('renders custom block and content helper names and removes them on reconfigure', async () => {
+      const hb = hbs.create();
+      const customTemplate = '{{#slotFor "sidebar"}}custom{{/slotFor}}{{{slot "sidebar"}}}';
+
+      hb.express({
+        blockHelperName: 'slot',
+        contentHelperName: 'slotFor'
+      });
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', customTemplate, {}),
+        'custom'
+      );
+
+      hb.express({});
+
+      await assert.rejects(
+        hb._renderFile('/tmp/inline.hbs', customTemplate, {}),
+        /Missing helper|slotFor|slot/
+      );
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{#contentFor "sidebar"}}default{{/contentFor}}{{{block "sidebar"}}}', {}),
+        'default'
+      );
+    });
+
     it('skips unsafe keys when cloning engine and template options', () => {
       const hb = hbs.create();
       hb.express({
@@ -1135,6 +1161,73 @@ describe('lib helpers', () => {
       assert.equal(hb.partialsMetadataCache, null);
     });
 
+    it('does not unregister user-overridden managed partials', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-override-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.writeFile(path.join(partialsDir, 'kept.hbs'), 'managed', 'utf8');
+
+      try {
+        hb.express({
+          partialsDir,
+          extname: '.hbs'
+        });
+
+        await hb.cachePartials();
+        hb.handlebars.registerPartial('kept', 'manual');
+        hb.invalidatePartialsManifest();
+
+        assert.equal(hb.handlebars.compile('{{> kept}}')({}), 'manual');
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('refreshPartialsManifest rescans partial files during cached renders', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-refresh-manifest-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      const viewsDir = path.join(tempRoot, 'views');
+      const renderOptions = { cache: true, settings: { views: viewsDir } };
+      const addedPartial = path.join(partialsDir, 'added.hbs');
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(path.join(partialsDir, 'existing.hbs'), 'existing-v1', 'utf8');
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          partialsDir,
+          viewsDir,
+          refreshPartialsManifest: true
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'existing.hbs'), '{{> existing}}', renderOptions),
+          'existing-v1 '
+        );
+
+        await fs.writeFile(addedPartial, 'added-v1', 'utf8');
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'added.hbs'), '{{> added}}', renderOptions),
+          'added-v1 '
+        );
+
+        await fs.rm(addedPartial);
+
+        await assert.rejects(
+          hb._renderFile(path.join(viewsDir, 'added.hbs'), '{{> added}}', renderOptions),
+          /partial added could not be found/i
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     it('defers partial compilation until a partial is actually rendered', async () => {
       const hb = hbs.create();
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-lazy-partials-'));
@@ -1666,6 +1759,54 @@ describe('lib helpers', () => {
       );
     });
 
+    it('passes three and variadic async helper arguments with options', async () => {
+      const hb = hbs.create();
+      hb.express({});
+      hb.registerAsyncHelper('three', (a, b, c, cb) => {
+        cb(`${a}:${b}:${c}`);
+      });
+      hb.registerAsyncHelper('threeOptions', (a, b, c, options, cb) => {
+        cb(`${options.hash.prefix}:${a}:${b}:${c}`);
+      });
+      hb.registerAsyncHelper('many', (a, b, c, d, cb) => {
+        cb(`${a}:${b}:${c}:${d}`);
+      });
+      const manyOptions = (...args) => {
+        const [a, b, c, d, options, cb] = args;
+        cb(`${options.hash.prefix}:${a}:${b}:${c}:${d}`);
+      };
+      Object.defineProperty(manyOptions, 'length', { value: 6 });
+      hb.registerAsyncHelper('manyOptions', manyOptions);
+
+      assert.equal(
+        await hb._renderFile(
+          '/tmp/inline.hbs',
+          '{{three "a" "b" "c"}}|{{threeOptions "a" "b" "c" prefix="p"}}|{{many "a" "b" "c" "d"}}|{{manyOptions "a" "b" "c" "d" prefix="q"}}.',
+          {}
+        ),
+        'a:b:c|p:a:b:c|a:b:c:d|q:a:b:c:d.'
+      );
+    });
+
+    it('drains successful async helper values removed from output', async () => {
+      const hb = hbs.create();
+      let completed = false;
+
+      hb.express({});
+      hb.registerAsyncHelper('later', () => new Promise((resolve) => {
+        setTimeout(() => {
+          completed = true;
+          resolve('hidden');
+        }, 1);
+      }));
+
+      assert.equal(
+        await hb._renderFile('/tmp/inline.hbs', '{{#contentFor "unused"}}{{later}}{{/contentFor}}ok', {}),
+        'ok'
+      );
+      assert.equal(completed, true);
+    });
+
     it('rejects invalid render options and callbacks', async () => {
       const hb = hbs.create();
       hb.express({
@@ -1735,6 +1876,58 @@ describe('lib helpers', () => {
           'ok'
         );
         assert.equal(seenSignal, controller.signal);
+      } finally {
+        fs.readFile = originalReadFile;
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('passes render signals through layout and partial reads', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-render-signal-assets-'));
+      const partialsDir = path.join(tempRoot, 'partials');
+      const viewsDir = path.join(tempRoot, 'views');
+      const layoutFile = path.join(tempRoot, 'layout.hbs');
+      const partialFile = path.join(partialsDir, 'piece.hbs');
+      const controller = new AbortController();
+      const originalReadFile = fs.readFile;
+      let layoutSignal;
+      let partialSignal;
+
+      await fs.mkdir(partialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(layoutFile, '<layout>{{{body}}}</layout>', 'utf8');
+      await fs.writeFile(partialFile, 'piece', 'utf8');
+
+      fs.readFile = async function(filename, options) {
+        const resolved = path.resolve(filename);
+        if (resolved === path.resolve(layoutFile)) {
+          layoutSignal = options.signal;
+        }
+        if (resolved === path.resolve(partialFile)) {
+          partialSignal = options.signal;
+        }
+        return originalReadFile.call(this, filename, options);
+      };
+
+      try {
+        hb.express({
+          extname: '.hbs',
+          defaultLayout: layoutFile,
+          partialsDir,
+          viewsDir,
+          restrictLayoutsTo: tempRoot
+        });
+
+        assert.equal(
+          await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> piece}}', {
+            signal: controller.signal,
+            settings: { views: viewsDir }
+          }),
+          '<layout>piece </layout>'
+        );
+        assert.equal(layoutSignal, controller.signal);
+        assert.equal(partialSignal, controller.signal);
       } finally {
         fs.readFile = originalReadFile;
         await fs.rm(tempRoot, { recursive: true, force: true });

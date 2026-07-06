@@ -3,6 +3,7 @@ export default _default;
 export type AnyObject = Record<string, unknown>;
 export type NodeStyleCallback = (err: Error | null, value?: unknown) => void;
 export type ExpressRenderCallback = (err: Error | null, html: string | null) => void;
+export type ExpressRenderFunction = (filename: string, sourceOrOptions: string | AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback) => void;
 export type LocalHandlebars = import("./handlebars.d.ts").LocalHandlebars;
 export type CompileHook = (instance: ExpressHbs, source: string, filename?: string) => Function;
 export type EngineOptions = AnyObject & {
@@ -12,7 +13,7 @@ export type EngineOptions = AnyObject & {
     layoutsDir?: string | string[];
     restrictLayoutsTo?: string;
     viewsDir?: string | string[];
-    defaultLayout?: string;
+    defaultLayout?: string | false;
     refreshPartialsManifest?: boolean;
     contentHelperName?: string;
     blockHelperName?: string;
@@ -229,17 +230,17 @@ declare class ExpressHbs {
     /**
      * Configures this instance and returns an Express-compatible render function.
      *
-     * @param {EngineOptions} options
-     * @returns {(filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void}
+     * @param {EngineOptions} [options]
+     * @returns {ExpressRenderFunction}
      */
-    express(options: EngineOptions): (filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void;
+    express(options?: EngineOptions): ExpressRenderFunction;
     /**
      * Backward-compatible Express 4 alias for `express()`.
      *
-     * @param {EngineOptions} options
-     * @returns {(filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void}
+     * @param {EngineOptions} [options]
+     * @returns {ExpressRenderFunction}
      */
-    express4(options: EngineOptions): (filename: string, sourceOrOptions: unknown, optionsOrCb: unknown, maybeCb?: ExpressRenderCallback) => void;
+    express4(options?: EngineOptions): ExpressRenderFunction;
     /**
      * Loads default layout templates when configured.
      *
@@ -422,6 +423,17 @@ declare class ExpressHbs {
      * @returns {void}
      */
     _updateAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, changedKeys: string[], escapedIds: Record<string, string>): void;
+    /**
+     * Propagates already resolved async placeholder values through nested helper results.
+     *
+     * @param {Record<string, unknown>} values
+     * @param {Record<string, unknown>} replacements
+     * @param {string[]} nestedValueKeys
+     * @param {Record<string, string>} escapedIds
+     * @param {number} replacementCount
+     * @returns {string[]}
+     */
+    _resolveNestedAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, nestedValueKeys: string[], escapedIds: Record<string, string>, replacementCount: number): string[];
     /**
      * Replaces async placeholder ids in a string.
      *
