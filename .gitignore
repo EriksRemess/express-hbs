@@ -69,3 +69,6 @@ typings/
 .DS_Store
 
 # Express-hbs Custom
+AGENTS.md
+Agents.md
+.agents/
