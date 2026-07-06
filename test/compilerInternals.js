@@ -461,6 +461,24 @@ describe('compiler internals', () => {
     assert.match(spec, /container\.program\(0,/);
   });
 
+  it('reuses equivalent child programs after many distinct children', () => {
+    const uniqueBlocks = Array.from(
+      { length: 10 },
+      (_, index) => `{{#if item${index}}}U${index}{{/if}}`
+    ).join('');
+    const source = uniqueBlocks + '{{#if a}}same{{/if}}{{#if b}}same{{/if}}';
+    const spec = precompile(source);
+    const childProgramCount = spec.match(/"\d+":function/g)?.length ?? 0;
+
+    assert.equal(childProgramCount, 11);
+
+    const hb = handlebars.create();
+    assert.equal(
+      hb.compile(source)({ item0: true, item9: true, a: true, b: true }),
+      'U0U9samesame'
+    );
+  });
+
   it('applies whitespace control for standalone and inline strip cases', () => {
     const standalone = parse('a\n{{! c }}\nb');
     assert.equal(standalone.body[2].value, 'b');
