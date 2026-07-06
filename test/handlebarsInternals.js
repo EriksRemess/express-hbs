@@ -7,7 +7,10 @@ import {
   resetLoggedProperties,
   resultIsAllowed
 } from '#handlebars/internal/proto-access';
-import { wrapHelper } from '#handlebars/internal/wrapHelper';
+import {
+  lookupPropertyOption,
+  wrapHelper
+} from '#handlebars/internal/wrapHelper';
 import logger from '#handlebars/logger';
 import { template } from '#handlebars/runtime';
 import { createFrame, escapeExpression } from '#handlebars/utils';
@@ -220,11 +223,24 @@ describe('handlebars unit internals', () => {
     source.own = 'value';
     const frame = createFrame(source);
     const emptyFrame = createFrame(null);
+    let parentReads = 0;
+    const sourceWithParent = { own: 'parent' };
+    Object.defineProperty(sourceWithParent, '_parent', {
+      enumerable: true,
+      get() {
+        parentReads += 1;
+        return 'ignored';
+      }
+    });
+    const frameWithParent = createFrame(sourceWithParent);
 
     assert.equal(frame.own, 'value');
     assert.equal(frame.inherited, undefined);
     assert.equal(frame._parent, source);
     assert.equal(emptyFrame._parent, null);
+    assert.equal(frameWithParent.own, 'parent');
+    assert.equal(frameWithParent._parent, sourceWithParent);
+    assert.equal(parentReads, 0);
   });
 
   it('does not trust prototype-inherited toHTML when escaping', () => {
@@ -412,6 +428,10 @@ describe('handlebars unit internals', () => {
     assert.equal(wrapHelper(passthrough, () => undefined), passthrough);
 
     const lookupProperty = (parent, key) => parent[key];
+    const helperWithoutLookup = () => 'helper';
+    helperWithoutLookup[lookupPropertyOption] = false;
+    assert.equal(wrapHelper(helperWithoutLookup, lookupProperty), helperWithoutLookup);
+
     let lookedUp;
     const wrapped = wrapHelper(function(value, options) {
       lookedUp = options.lookupProperty(value, 'name');
@@ -587,7 +607,7 @@ describe('handlebars unit internals', () => {
       /The partial undefined could not be found/
     );
     assert.equal(hb.compile('{{#> missing foo="BAR"}}{{foo}}:{{name}}{{/missing}}')({ name: 'Ada' }), 'BAR:Ada');
-    assert.equal(hb.compile('  {{> multiline}}')({}), '  A\nB\n');
+    assert.equal(hb.compile('  {{> multiline}}')({}), '  A\n  B\n');
     assert.equal(hb.compile('{{peek target}}')({
       target: Object.create({ inherited: 'secret' })
     }), 'blocked');

@@ -6,13 +6,47 @@ import { compile, precompile } from '#handlebars/compiler/compiler';
 import handlebars from '#handlebars';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 
+const require = createRequire(import.meta.url);
+const upstreamParser = require('handlebars/dist/cjs/handlebars/compiler/base.js');
 const ROOT = process.cwd();
 const SEARCH_DIRS = [
   path.join(ROOT, 'example'),
   path.join(ROOT, 'test')
+];
+
+const UPSTREAM_AST_SAMPLES = [
+  '{{title}}',
+  '{{{body}}}',
+  '{{#if production}}yes{{else}}no{{/if}}',
+  '{{> scripts}}',
+  '{{helper "x" key=value}}',
+  '{{!< layout/default}}',
+  '{{__n "%d cat" "%d cats" .}}',
+  '{{#contentFor "pageStyles"}}<style></style>{{/contentFor}}',
+  '{{foo.[bar baz]}}',
+  '{{../name}}',
+  '{{..}}',
+  '{{@../index}}',
+  '{{./name}}',
+  '{{this/name}}',
+  '{{this.name}}',
+  '{{this}}',
+  '{{!-- visible --}}',
+  '{{*decorator foo=bar}}',
+  '{{& value}}',
+  '{{foo (bar key=value)}}',
+  '{{#each items as |item|}}{{item}}{{/each}}',
+  '{{#if a}}A{{else if b}}B{{else}}C{{/if}}',
+  '{{{{raw}}}}{{foo}}{{{{/raw}}}}',
+  '{{#*inline "row"}}x{{/inline}}{{> row}}',
+  '{{#> layout}}Body{{/layout}}',
+  'a\n{{! c }}\nb',
+  'x {{~! c ~}} y',
+  '{{foo true false null undefined 12 -3 4.5}}'
 ];
 
 test('parser handles valid repo templates', async () => {
@@ -59,6 +93,23 @@ test('parser output compiles for valid repo templates', async () => {
   }
 
   assert.ok(checked.length > 0);
+});
+
+test('parser AST matches upstream Handlebars for representative shared syntax', () => {
+  const parserPairs = [
+    ['raw', parseWithoutProcessing, upstreamParser.parseWithoutProcessing],
+    ['processed', parse, upstreamParser.parse]
+  ];
+
+  for (const source of UPSTREAM_AST_SAMPLES) {
+    for (const [stage, forkParse, upstreamParse] of parserPairs) {
+      assert.deepStrictEqual(
+        normalizeAst(forkParse(source)),
+        normalizeAst(upstreamParse(source)),
+        `${stage}: ${source}`
+      );
+    }
+  }
 });
 
 test('parser handles representative inline syntax', () => {
@@ -300,7 +351,7 @@ test('parser handles representative inline syntax', () => {
             data: false,
             depth: 0,
             parts: ['foo', 'bar baz'],
-            original: 'foo.[bar baz]'
+            original: 'foo.bar baz'
           },
           params: [],
           escaped: true,
@@ -702,6 +753,7 @@ test('helpers can access the current partial name', () => {
 test('escaped output replaces forbidden code points', () => {
   const template = handlebars.compile('{{name}}');
   assert.equal(template({ name: 'A\u0002B' }), 'A\uFFFDB');
+  assert.equal(template({ name: 'A<&\u0002B' }), 'A&lt;&amp;\uFFFDB');
   assert.equal(template({ name: 'A\uD800B' }), 'A\uFFFDB');
   assert.equal(template({ name: 'A\uFFFFB' }), 'A\uFFFDB');
   assert.equal(template({ name: 'A\u{1F600}B' }), 'A\u{1F600}B');

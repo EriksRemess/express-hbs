@@ -72,3 +72,4 @@ typings/
 AGENTS.md
 Agents.md
 .agents/
+benchmark/fixtures/views/generated/

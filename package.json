@@ -43,9 +43,11 @@
     "types:rebuild": "npm run types:clean && npm run types:build",
     "types:test": "tsc -p tsconfig.test-types.json",
     "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' test/*.js",
-    "bench": "npm --prefix benchmark run compare",
-    "bench:compare-original": "npm --prefix benchmark run compare",
-    "bench:compare-original:async": "npm --prefix benchmark run compare:async"
+    "bench": "npm --prefix benchmark run baseline",
+    "bench:async": "npm --prefix benchmark run async",
+    "bench:large": "npm --prefix benchmark run large",
+    "bench:compiler": "npm --prefix benchmark run compiler",
+    "bench:parser": "npm --prefix benchmark run parser"
   },
   "repository": {
     "type": "git",
@@ -67,6 +69,7 @@
     "eslint": "^10.6.0",
     "express": "github:EriksRemess/express#eriks-esm",
     "globals": "^17.7.0",
+    "handlebars": "^4.7.9",
     "i18n": "0.15.3",
     "typescript": "^6.0.3"
   }

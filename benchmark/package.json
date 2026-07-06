@@ -3,10 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "compare": "node compare-with-original.js",
-    "compare:async": "BENCH_SCENARIO=async node compare-with-original.js"
+    "baseline": "node compare-with-original.js",
+    "async": "BENCH_SCENARIO=async node compare-with-original.js",
+    "large": "BENCH_SCENARIO=large node compare-with-original.js",
+    "compiler": "BENCH_SCENARIO=compiler node compare-with-original.js",
+    "parser": "node parser.js"
   },
   "dependencies": {
+    "handlebars": "^4.7.9",
     "tryghost-express-hbs": "npm:express-hbs@^2.5.0"
   }
 }

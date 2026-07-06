@@ -4,6 +4,7 @@ import Visitor from '#handlebars/compiler/visitor';
 import WhitespaceControl from '#handlebars/compiler/whitespace-control';
 import handlebars from '#handlebars';
 import { describe, it } from '#test/testkit';
+import upstreamHandlebars from 'handlebars';
 import assert from 'node:assert';
 
 const pathExpression = (original) => ({
@@ -31,6 +32,21 @@ const program = (...body) => ({
   body,
   strip: {}
 });
+
+function createComparisonRuntime(base) {
+  const hb = base.create();
+
+  hb.registerHelper('formatCell', (value, alternate, options) => {
+    const hash = options.hash || {};
+    return `${hash.label}:${value}:${alternate}:${hash.order}`;
+  });
+  hb.registerHelper('pick', (value, fallback) => value || fallback);
+  hb.registerHelper('inspect', (...args) => args.slice(0, -1).map(String).join('|'));
+  hb.registerPartial('card', '<strong>{{name}}</strong>');
+  hb.registerPartial('layout', '<main>{{> @partial-block}}</main>');
+
+  return hb;
+}
 
 describe('compiler internals', () => {
   it('validates inputs and exposes lazy compile wrapper methods', () => {
@@ -79,6 +95,15 @@ describe('compiler internals', () => {
     } finally {
       delete Object.prototype.noEscape;
     }
+  });
+
+  it('preserves aliasable source nodes in generated code', () => {
+    const spec = precompile('{{name}}{{kind}}{{name}}{{kind}}');
+
+    assert.match(spec, /alias\d+=depth0 != null \? depth0 : \(container\.nullContext \|\| {}\)/);
+    assert.match(spec, /alias\d+=container\.hooks\.helperMissing/);
+    assert.match(spec, /alias\d+="function"/);
+    assert.match(spec, /alias\d+=container\.escapeExpression/);
   });
 
   it('covers helper resolution, partial compilation options, and decorator paths', () => {
@@ -190,6 +215,92 @@ describe('compiler internals', () => {
       () => hb.compile('{{user.name}}', { strict: true })({}),
       /"name" not defined in undefined/
     );
+  });
+
+  it('renders representative templates like upstream Handlebars', () => {
+    const cases = [
+      {
+        name: 'escaped and triple mustaches',
+        source: 'Hello {{name}} {{{html}}}',
+        context: { name: '<Ada>', html: '<b>ok</b>' }
+      },
+      {
+        name: 'if else',
+        source: '{{#if ok}}yes{{else}}no{{/if}}',
+        context: { ok: false }
+      },
+      {
+        name: 'else-if chain',
+        source: '{{#if a}}A{{else if b}}B{{else}}C{{/if}}',
+        context: { a: false, b: true }
+      },
+      {
+        name: 'each with block params',
+        source: '{{#each items as |item|}}{{@index}}:{{item.name}};{{/each}}',
+        context: { items: [{ name: 'a' }, { name: 'b' }] }
+      },
+      {
+        name: 'with parent depth',
+        source: '{{#with child}}{{../name}}/{{name}}{{/with}}',
+        context: { name: 'root', child: { name: 'child' } }
+      },
+      {
+        name: 'parent depth data',
+        source: '{{#each rows}}{{#each cols}}{{@../index}}:{{@index}};{{/each}}{{/each}}',
+        context: { rows: [{ cols: [1, 2] }, { cols: [3] }] }
+      },
+      {
+        name: 'helper params hashes and subexpressions',
+        source: '{{formatCell (pick primary fallback) alt label="cell" order=2}}',
+        context: { primary: '', fallback: 'fallback', alt: 'ALT' }
+      },
+      {
+        name: 'partial',
+        source: 'Hello {{> card}}',
+        context: { name: 'Ada' }
+      },
+      {
+        name: 'dynamic partial',
+        source: '{{> (lookup . "which")}}',
+        context: { which: 'card', name: 'Grace' }
+      },
+      {
+        name: 'inline partial',
+        source: '{{#*inline "row"}}{{name}}{{/inline}}{{> row}}',
+        context: { name: 'Lin' }
+      },
+      {
+        name: 'partial block',
+        source: '{{#> layout}}Body {{name}}{{/layout}}',
+        context: { name: 'Mae' }
+      },
+      {
+        name: 'bracket path literal',
+        source: '{{foo.[bar baz]}}',
+        context: { foo: { 'bar baz': 'ok' } }
+      },
+      {
+        name: 'literals',
+        source: '{{inspect true false null undefined 12 -3 4.5}}',
+        context: {}
+      },
+      {
+        name: 'whitespace control',
+        source: 'a {{~name~}} b',
+        context: { name: 'X' }
+      }
+    ];
+
+    for (const sample of cases) {
+      const fork = createComparisonRuntime(handlebars);
+      const upstream = createComparisonRuntime(upstreamHandlebars);
+
+      assert.equal(
+        fork.compile(sample.source)(sample.context),
+        upstream.compile(sample.source)(sample.context),
+        sample.name
+      );
+    }
   });
 
   it('supports stringParams and trackIds together for params and hashes', () => {

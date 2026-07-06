@@ -1207,14 +1207,14 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'existing.hbs'), '{{> existing}}', renderOptions),
-          'existing-v1 '
+          'existing-v1'
         );
 
         await fs.writeFile(addedPartial, 'added-v1', 'utf8');
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'added.hbs'), '{{> added}}', renderOptions),
-          'added-v1 '
+          'added-v1'
         );
 
         await fs.rm(addedPartial);
@@ -1259,13 +1259,13 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: true, settings: { views: viewsDir } }),
-          'used '
+          'used'
         );
         assert.equal(partialCompileCount, 1);
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: true, settings: { views: viewsDir } }),
-          'used '
+          'used'
         );
         assert.equal(partialCompileCount, 1);
       } finally {
@@ -1303,12 +1303,12 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
-          'used-v1 '
+          'used-v1'
         );
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
-          'used-v1 '
+          'used-v1'
         );
 
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1316,7 +1316,7 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> used}}', { cache: false, settings: { views: viewsDir } }),
-          'used-v2 '
+          'used-v2'
         );
 
         assert.equal(readCounts.get(path.resolve(usedPartialFile)), 2);
@@ -1347,7 +1347,7 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> gone}}', { cache: false, settings: { views: viewsDir } }),
-          'gone-v1 '
+          'gone-v1'
         );
 
         await fs.rm(partialFile);
@@ -1383,7 +1383,7 @@ describe('lib helpers', () => {
 
         assert.equal(
           await hb._renderFile(path.join(viewsDir, 'inline.hbs'), '{{> old}}', { cache: false, settings: { views: viewsDir } }),
-          'old-partial '
+          'old-partial'
         );
 
         hb.express({
@@ -1924,7 +1924,7 @@ describe('lib helpers', () => {
             signal: controller.signal,
             settings: { views: viewsDir }
           }),
-          '<layout>piece </layout>'
+          '<layout>piece</layout>'
         );
         assert.equal(layoutSignal, controller.signal);
         assert.equal(partialSignal, controller.signal);

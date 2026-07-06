@@ -20,9 +20,14 @@ const fixturesDir = path.join(__dirname, 'fixtures');
 const viewsDir = path.join(fixturesDir, 'views');
 const partialsDir = path.join(fixturesDir, 'partials');
 const layoutsDir = path.join(fixturesDir, 'layouts');
+const generatedViewsDir = path.join(viewsDir, 'generated');
 const baselineTemplateFile = path.join(viewsDir, 'index.hbs');
 const asyncTemplateFile = path.join(viewsDir, 'async-heavy.hbs');
+const largeTemplateFile = path.join(generatedViewsDir, 'large.hbs');
+const compilerTemplateFile = path.join(generatedViewsDir, 'compiler.hbs');
 const scenario = process.env.BENCH_SCENARIO ?? 'baseline';
+const largeSectionCount = Number.parseInt(process.env.BENCH_LARGE_SECTIONS ?? '12', 10);
+const compilerBlockCount = Number.parseInt(process.env.BENCH_COMPILER_BLOCKS ?? '180', 10);
 const scenarioDefaults = {
   baseline: {
     templateFile: baselineTemplateFile,
@@ -35,6 +40,20 @@ const scenarioDefaults = {
     verifyText: 'ASYNC BENCHMARK',
     defaultItems: 40,
     defaultProfile: 'smoke'
+  },
+  large: {
+    templateFile: largeTemplateFile,
+    verifyText: 'LARGE BENCHMARK COMPLETE',
+    defaultItems: 120,
+    defaultProfile: 'fixture',
+    generated: true
+  },
+  compiler: {
+    templateFile: compilerTemplateFile,
+    verifyText: 'COMPILER STRESS BENCHMARK COMPLETE',
+    defaultItems: 40,
+    defaultProfile: 'compiler',
+    generated: true
   }
 };
 const selectedScenarioName = scenarioDefaults[scenario] ? scenario : 'baseline';
@@ -45,6 +64,8 @@ const profileDefaults = {
   default: { iterations: 1000, warmup: 120, rounds: 9 },
   smoke: { iterations: 50, warmup: 10, rounds: 1 },
   quick: { iterations: 250, warmup: 40, rounds: 3 },
+  fixture: { iterations: 30, warmup: 5, rounds: 3 },
+  compiler: { iterations: 40, warmup: 8, rounds: 3 },
   stable: { iterations: 1500, warmup: 180, rounds: 9 }
 };
 const selectedProfile = profileDefaults[profile] ?? profileDefaults.default;
@@ -73,10 +94,121 @@ if (!Number.isInteger(rounds) || rounds <= 0) {
   throw new Error(`BENCH_ROUNDS must be a positive integer, got: ${process.env.BENCH_ROUNDS}`);
 }
 
+if (!Number.isInteger(largeSectionCount) || largeSectionCount <= 0) {
+  throw new Error(`BENCH_LARGE_SECTIONS must be a positive integer, got: ${process.env.BENCH_LARGE_SECTIONS}`);
+}
+
+if (!Number.isInteger(compilerBlockCount) || compilerBlockCount <= 0) {
+  throw new Error(`BENCH_COMPILER_BLOCKS must be a positive integer, got: ${process.env.BENCH_COMPILER_BLOCKS}`);
+}
+
 const items = Array.from({ length: itemCount }, (_, index) => ({
   name: `Item ${index}`,
-  kind: index % 2 === 0 ? 'fruit' : 'veg'
+  kind: index % 2 === 0 ? 'fruit' : 'veg',
+  featured: index % 3 === 0,
+  meta: {
+    index,
+    label: `meta-${index % 7}`,
+    active: index % 5 !== 0
+  },
+  tags: [`tag-${index % 4}`, `kind-${index % 2}`]
 }));
+const compilerLocals = createCompilerLocals();
+
+function buildLargeTemplate() {
+  const lines = [
+    '{{!< default}}',
+    '<article class="large-benchmark">',
+    '<h1>LARGE BENCHMARK</h1>'
+  ];
+
+  for (let section = 0; section < largeSectionCount; section += 1) {
+    lines.push(
+      `<section class="benchmark-section" data-section="${section}">`,
+      `<h2>{{title}} section ${section}</h2>`,
+      '<ul>',
+      '{{#each items}}',
+      '  {{> large-card}}',
+      '  {{#if featured}}',
+      `    <p class="featured">featured:${section}:{{name}}:{{kind}}</p>`,
+      '  {{else}}',
+      `    <p class="standard">standard:${section}:{{name}}:{{kind}}</p>`,
+      '  {{/if}}',
+      '  {{#with meta}}',
+      `    <span class="meta">meta:${section}:{{label}}:{{index}}</span>`,
+      '    {{#if active}}<span class="active">active</span>{{else}}<span class="inactive">inactive</span>{{/if}}',
+      '  {{/with}}',
+      '  {{#each tags}}<em>{{this}}</em>{{/each}}',
+      '{{/each}}',
+      '</ul>',
+      '</section>'
+    );
+  }
+
+  lines.push(
+    '{{#contentFor "scripts"}}',
+    '<script>window.__LARGE_BENCHMARK = true;</script>',
+    '{{/contentFor}}',
+    '<p>LARGE BENCHMARK COMPLETE</p>',
+    '</article>',
+    ''
+  );
+
+  return lines.join('\n');
+}
+
+function buildCompilerTemplate() {
+  const lines = [
+    '{{!< default}}',
+    '<article class="compiler-benchmark">',
+    '<h1>COMPILER STRESS BENCHMARK</h1>',
+    '<section class="items">',
+    '{{#each items}}',
+    '  {{#if featured}}',
+    '    <b>{{formatCell name kind label="item-featured"}}</b>',
+    '  {{else}}',
+    '    <i>{{formatCell name kind label="item-standard"}}</i>',
+    '  {{/if}}',
+    '{{/each}}',
+    '</section>'
+  ];
+
+  for (let index = 0; index < compilerBlockCount; index += 1) {
+    lines.push(
+      `<div class="compiler-slot" data-slot="${index}">`,
+      `{{#if flag${index}}}`,
+      `  <span>{{formatCell value${index} alt${index} label="flag-${index}" order=${index}}}</span>`,
+      `  {{#with group${index}}}<small>{{name}}/{{kind}}/{{meta.label}}</small>{{/with}}`,
+      '{{else}}',
+      `  <span>{{formatCell fallback${index} alt${index} label="fallback-${index}" order=${index}}}</span>`,
+      '{{/if}}',
+      '</div>'
+    );
+  }
+
+  lines.push(
+    '{{#contentFor "scripts"}}',
+    '<script>window.__COMPILER_STRESS_BENCHMARK = true;</script>',
+    '{{/contentFor}}',
+    '<p>COMPILER STRESS BENCHMARK COMPLETE</p>',
+    '</article>',
+    ''
+  );
+
+  return lines.join('\n');
+}
+
+async function ensureGeneratedFixtures() {
+  if (!selectedScenario.generated) {
+    return;
+  }
+
+  await fs.mkdir(generatedViewsDir, { recursive: true });
+  await Promise.all([
+    fs.writeFile(largeTemplateFile, buildLargeTemplate(), 'utf8'),
+    fs.writeFile(compilerTemplateFile, buildCompilerTemplate(), 'utf8')
+  ]);
+}
 
 function getExpressFactory(engine) {
   if (typeof engine.express === 'function') {
@@ -93,8 +225,17 @@ function getExpressFactory(engine) {
 function createRenderer(engineModule, scenarioName) {
   const engine = engineModule.create();
 
-  engine.registerAsyncHelper('delayUpper', (value, cb) => {
-    queueMicrotask(() => cb(String(value).toUpperCase()));
+  if (scenarioName === 'baseline' || scenarioName === 'async') {
+    engine.registerAsyncHelper('delayUpper', (value, cb) => {
+      queueMicrotask(() => cb(String(value).toUpperCase()));
+    });
+  }
+
+  engine.registerHelper('formatCell', (value, alternate, options) => {
+    const hash = options.hash || {};
+    const label = hash.label || 'cell';
+    const order = hash.order == null ? '' : `:${hash.order}`;
+    return `${label}:${value}:${alternate}${order}`;
   });
 
   if (scenarioName === 'async') {
@@ -118,20 +259,40 @@ function createRenderer(engineModule, scenarioName) {
   });
 }
 
-function createRenderOptions(cacheEnabled) {
+function createCompilerLocals() {
+  const locals = {};
+  for (let index = 0; index < compilerBlockCount; index += 1) {
+    locals[`flag${index}`] = index % 2 === 0;
+    locals[`value${index}`] = `value-${index}`;
+    locals[`fallback${index}`] = `fallback-${index}`;
+    locals[`alt${index}`] = `alt-${index % 9}`;
+    locals[`group${index}`] = items[index % items.length];
+  }
+
+  return locals;
+}
+
+function createScenarioLocals(scenarioConfig) {
+  return scenarioConfig.templateFile === compilerTemplateFile
+    ? compilerLocals
+    : {};
+}
+
+function createRenderOptions(cacheEnabled, scenarioConfig) {
   return {
     cache: cacheEnabled,
     settings: {
       views: viewsDir
     },
     title: 'Benchmark Title',
-    items: items
+    items: items,
+    ...createScenarioLocals(scenarioConfig)
   };
 }
 
-function renderOnce(renderer, cacheEnabled, templateFile) {
+function renderOnce(renderer, cacheEnabled, scenarioConfig) {
   return new Promise((resolve, reject) => {
-    renderer(templateFile, createRenderOptions(cacheEnabled), (error, html) => {
+    renderer(scenarioConfig.templateFile, createRenderOptions(cacheEnabled, scenarioConfig), (error, html) => {
       if (error) {
         reject(error);
         return;
@@ -146,16 +307,16 @@ async function runScenario(name, engineModule, cacheEnabled, scenarioConfig) {
   const renderer = createRenderer(engineModule, selectedScenarioName);
 
   for (let i = 0; i < warmupIterations; i += 1) {
-    await renderOnce(renderer, cacheEnabled, scenarioConfig.templateFile);
+    await renderOnce(renderer, cacheEnabled, scenarioConfig);
   }
 
   const start = performance.now();
   for (let i = 0; i < iterations; i += 1) {
-    await renderOnce(renderer, cacheEnabled, scenarioConfig.templateFile);
+    await renderOnce(renderer, cacheEnabled, scenarioConfig);
   }
   const totalMs = performance.now() - start;
 
-  const firstRender = await renderOnce(renderer, cacheEnabled, scenarioConfig.templateFile);
+  const firstRender = await renderOnce(renderer, cacheEnabled, scenarioConfig);
   if (!firstRender.includes(scenarioConfig.verifyText)) {
     throw new Error(`Unexpected output while benchmarking ${name}`);
   }
@@ -281,6 +442,11 @@ async function main() {
   console.log(`Scenario=${selectedScenarioName}`);
   console.log(`Profile=${profile}`);
   console.log(`Iterations=${iterations}, Warmup=${warmupIterations}, Items=${itemCount}, Rounds=${rounds}`);
+  if (selectedScenario.generated) {
+    console.log(`GeneratedLargeSections=${largeSectionCount}, CompilerBlocks=${compilerBlockCount}`);
+  }
+
+  await ensureGeneratedFixtures();
 
   const engineVariants = [
     ['fork', forkHbs],
@@ -321,6 +487,8 @@ async function main() {
         warmupIterations,
         itemCount,
         rounds,
+        largeSectionCount,
+        compilerBlockCount,
         showRawSamples
       },
       aggregates,

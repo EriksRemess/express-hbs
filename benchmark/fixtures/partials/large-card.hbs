@@ -1,0 +1,6 @@
+<li class="large-card {{kind}}">
+  <strong>{{name}}</strong>
+  <span>{{kind}}</span>
+  {{#if featured}}<b>featured</b>{{else}}<i>standard</i>{{/if}}
+  {{#with meta}}<small>{{label}}:{{index}}</small>{{/with}}
+</li>
