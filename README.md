@@ -8,7 +8,7 @@ This project is an update of the original `express-hbs`, focused on Node.js 26+ 
 
 - Original project: https://github.com/TryGhost/express-hbs
 - Fork (this project): https://github.com/EriksRemess/express-hbs
-- npm package name: `@eriks/express-hbs`
+- GitHub Packages name: `@eriksremess/express-hbs`
 
 All credit for the engine design and original implementation goes to the original `express-hbs` developers and contributors.
 
@@ -39,7 +39,7 @@ To use with Express 5:
 ```js
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import hbs from '@eriks/express-hbs';
+import hbs from '@eriksremess/express-hbs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const viewsDir = path.join(__dirname, 'views');
@@ -309,7 +309,7 @@ app.use(i18n.init);
 Create isolated engine instances with their own cache system and Handlebars engine.
 
 ```js
-import hbs from '@eriks/express-hbs';
+import hbs from '@eriksremess/express-hbs';
 
 const instance1 = hbs.create();
 const instance2 = hbs.create();

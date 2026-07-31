@@ -1,4 +1,4 @@
-import hbs, { type EngineOptions } from '@eriks/express-hbs';
+import hbs, { type EngineOptions } from '@eriksremess/express-hbs';
 
 const renderWithoutOptions = hbs.express();
 renderWithoutOptions('/tmp/example.hbs', {}, (_err, _html) => {});

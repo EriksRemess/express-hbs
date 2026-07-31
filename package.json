@@ -1,6 +1,6 @@
 {
-  "name": "@eriks/express-hbs",
-  "version": "2.5.0",
+  "name": "@eriksremess/express-hbs",
+  "version": "2.5.1",
   "description": "Fork of express-hbs updated for Node.js 26+ and Express 5.",
   "keywords": [
     "express5",
@@ -27,7 +27,8 @@
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   },
   "directories": {
     "example": "example"

@@ -10,7 +10,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@eriks/express-hbs": [
+      "@eriksremess/express-hbs": [
         "types/lib/hbs.d.ts"
       ]
     },
