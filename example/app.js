@@ -1,5 +1,5 @@
 import hbsDefault from '#hbs';
-import express from 'express';
+import express from '@eriksremess/express';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

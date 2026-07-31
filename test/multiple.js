@@ -1,7 +1,7 @@
 import hbs from '#hbs';
 import { request } from '#test/http';
 import { beforeEach, describe, it } from '#test/testkit';
-import express from 'express';
+import express from '@eriksremess/express';
 import assert from 'node:assert';
 
 describe('multiple directories', () => {

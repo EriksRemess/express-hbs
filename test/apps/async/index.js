@@ -1,4 +1,4 @@
-import express from 'express';
+import express from '@eriksremess/express';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
