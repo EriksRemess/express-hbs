@@ -22,6 +22,20 @@ export function createFrame(object: Record<string, unknown>): Record<string, unk
     _parent: Record<string, unknown>;
 };
 /**
+ * Marks internally-created runtime options so the program wrapper can trust their shape.
+ *
+ * @param {Record<PropertyKey, unknown>} options
+ * @returns {Record<PropertyKey, unknown>}
+ */
+export function markInternalOptions(options: Record<PropertyKey, unknown>): Record<PropertyKey, unknown>;
+/**
+ * Checks whether an options object was created by the runtime/helpers.
+ *
+ * @param {unknown} options
+ * @returns {boolean}
+ */
+export function isInternalOptions(options: unknown): boolean;
+/**
  * Attaches block-param path metadata to the params array.
  *
  * @param {unknown[] & { path?: unknown }} params

@@ -6,3 +6,4 @@
  * @returns {unknown}
  */
 export function wrapHelper(helper: unknown, lookupProperty: (parent: object, propertyName: string) => unknown): unknown;
+export const lookupPropertyOption: unique symbol;

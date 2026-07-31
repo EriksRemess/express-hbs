@@ -33,14 +33,15 @@
     "example": "example"
   },
   "scripts": {
-    "lint": "eslint --ext .js --cache lib test example",
+    "lint": "eslint --ext .js --cache lib test example scripts",
     "test": "node --test test/*.js",
     "test:random": "node --test --test-randomize test/*.js",
     "posttest": "npm run lint",
-    "ci": "npm test && npm run lint && npm run test:random && npm run types:build && npm run types:test && npm run coverage",
+    "ci": "npm test && npm run lint && npm run test:random && npm run types:verify && npm run types:test && npm run coverage",
     "types:clean": "rm -rf types",
     "types:build": "tsc -p tsconfig.types.json && mkdir -p types/lib && cp lib/handlebars.d.ts types/lib/handlebars.d.ts",
     "types:rebuild": "npm run types:clean && npm run types:build",
+    "types:verify": "node scripts/verify-types.js",
     "types:test": "tsc -p tsconfig.test-types.json",
     "coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' test/*.js",
     "bench": "npm --prefix benchmark run baseline",
@@ -51,7 +52,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:EriksRemess/express-hbs.git"
+    "url": "https://github.com/EriksRemess/express-hbs.git"
   },
   "bugs": "https://github.com/EriksRemess/express-hbs/issues",
   "author": "Ēriks Remess <eriks@remess.lv>",
@@ -66,8 +67,8 @@
   "devDependencies": {
     "@types/node": "^26.1.0",
     "cookie-parser": "1.4.7",
-    "eslint": "^10.6.0",
-    "express": "github:EriksRemess/express#eriks-esm",
+    "eslint": "^10.8.0",
+    "express": "git+https://github.com/EriksRemess/express.git#eriks-esm",
     "globals": "^17.7.0",
     "handlebars": "^4.7.9",
     "i18n": "0.15.3",

@@ -46,12 +46,12 @@ export default class Visitor {
     Program(program: {
         body: unknown[];
     }): void;
-    MustacheStatement: typeof visitSubExpression;
-    Decorator: typeof visitSubExpression;
-    BlockStatement: typeof visitBlock;
-    DecoratorBlock: typeof visitBlock;
-    PartialStatement: typeof visitPartial;
-    SubExpression: typeof visitSubExpression;
+    MustacheStatement(mustache: any): void;
+    Decorator(mustache: any): void;
+    BlockStatement(block: any): void;
+    DecoratorBlock(block: any): void;
+    PartialStatement(partial: any): void;
+    SubExpression(sexpr: any): void;
     /**
      * Visits a partial block node and its nested program.
      *
@@ -84,39 +84,3 @@ export default class Visitor {
      */
     HashPair(pair: object): void;
 }
-/**
- * Visits a mustache-like node with a path, params, and hash.
- *
- * @this {Visitor}
- * @param {{ path?: object, params: object[], hash?: object }} mustache
- * @returns {void}
- */
-declare function visitSubExpression(this: Visitor, mustache: {
-    path?: object;
-    params: object[];
-    hash?: object;
-}): void;
-/**
- * Visits a block-like node including its nested programs.
- *
- * @this {Visitor}
- * @param {{ program?: object, inverse?: object }} block
- * @returns {void}
- */
-declare function visitBlock(this: Visitor, block: {
-    program?: object;
-    inverse?: object;
-}): void;
-/**
- * Visits a partial-like node.
- *
- * @this {Visitor}
- * @param {{ name?: object, params: object[], hash?: object }} partial
- * @returns {void}
- */
-declare function visitPartial(this: Visitor, partial: {
-    name?: object;
-    params: object[];
-    hash?: object;
-}): void;
-export {};

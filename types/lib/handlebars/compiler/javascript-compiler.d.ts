@@ -142,12 +142,48 @@ declare class JavaScriptCompiler {
     /**
      * Returns a previously compiled child program with an equivalent environment, if present.
      *
-     * @param {{ equals(environment: unknown): boolean }} child
+     * @param {{ equals(environment: unknown): boolean, getSignature?: () => string, signature?: string }} child
      * @returns {unknown}
      */
     matchExistingProgram(child: {
         equals(environment: unknown): boolean;
+        getSignature?: () => string;
+        signature?: string;
     }): unknown;
+    /**
+     * Returns a matching child program without using the signature index.
+     *
+     * @param {{ equals(environment: unknown): boolean }} child
+     * @returns {unknown}
+     */
+    matchExistingProgramByScan(child: {
+        equals(environment: unknown): boolean;
+    }): unknown;
+    /**
+     * Adds a compiled child program to the signature index used by matchExistingProgram().
+     *
+     * @param {{ getSignature?: () => string, signature?: string }} child
+     * @param {number} index
+     * @returns {void}
+     */
+    indexCompiledProgram(child: {
+        getSignature?: () => string;
+        signature?: string;
+    }, index: number): void;
+    /**
+     * Builds or returns the index of previously compiled child programs by signature.
+     *
+     * @returns {Map<string, number[]>}
+     */
+    getProgramSignatureIndex(): Map<string, number[]>;
+    /**
+     * @param {{ getSignature?: () => string, signature?: string }} environment
+     * @returns {string | undefined}
+     */
+    getCompiledProgramSignature(environment: {
+        getSignature?: () => string;
+        signature?: string;
+    }): string | undefined;
     /**
      * Builds the runtime expression that loads a compiled child program.
      *
@@ -169,7 +205,7 @@ declare class JavaScriptCompiler {
     contextName(context: any): string;
     quotedString(str: any): string;
     objectLiteral(obj: any): {
-        src: string;
+        children: any[];
         add(chunks: string | string[] | /*elided*/ any): void;
         prepend(chunks: string | string[] | /*elided*/ any): void;
         toStringWithSourceMap(): {

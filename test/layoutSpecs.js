@@ -5,6 +5,8 @@ import { createLocals, renderTemplate, renderTemplateResult, stripWs } from '#te
 import { request } from '#test/http';
 import { beforeEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 const __dirname = dirnameFromMeta(import.meta.url);
@@ -49,18 +51,44 @@ describe('layouts', () => {
 
     it('should render declarative layouts when layoutsDir is an array', async () => {
       const exampleViews = path.join(__dirname, '../example/views');
-      const render = hbs.create().express({
-        partialsDir: [path.join(exampleViews, 'partials'), path.join(exampleViews, 'partials-other')],
-        layoutsDir: [path.join(exampleViews, 'layout')],
-        restrictLayoutsTo: path.join(exampleViews, 'layout')
-      });
-      const locals = createLocals('express', exampleViews, {
-        cache: true,
-        title: 'My favorite fruits',
-        fruits: [{ name: 'apple' }]
-      });
-      const html = await renderTemplate(render, path.join(exampleViews, 'fruits/index-layoutsDir.hbs'), locals);
-      assert.match(html, /DECLARATIVE LAYOUT/);
+      const emptyLayoutsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layouts-first-'));
+
+      try {
+        const render = hbs.create().express({
+          partialsDir: [path.join(exampleViews, 'partials'), path.join(exampleViews, 'partials-other')],
+          layoutsDir: [emptyLayoutsDir, path.join(exampleViews, 'layout')]
+        });
+        const locals = createLocals('express', exampleViews, {
+          cache: true,
+          title: 'My favorite fruits',
+          fruits: [{ name: 'apple' }]
+        });
+        const html = await renderTemplate(render, path.join(exampleViews, 'fruits/index-layoutsDir.hbs'), locals);
+        assert.match(html, /DECLARATIVE LAYOUT/);
+        assert.match(html, /<!DOCTYPE html>/);
+      } finally {
+        await fs.rm(emptyLayoutsDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should resolve options.layout from the first matching layoutsDir', async () => {
+      const exampleViews = path.join(__dirname, '../example/views');
+      const emptyLayoutsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layouts-options-first-'));
+
+      try {
+        const render = hbs.create().express({
+          partialsDir: [path.join(exampleViews, 'partials'), path.join(exampleViews, 'partials-other')],
+          layoutsDir: [emptyLayoutsDir, path.join(exampleViews, 'layout')]
+        });
+        const locals = createLocals('express', exampleViews, {
+          layout: 'veggie',
+          veggies: [{ name: 'carrot' }]
+        });
+        const html = await renderTemplate(render, path.join(exampleViews, 'veggies.hbs'), locals);
+        assert.match(html, /PROGRAMMATIC LAYOUT/);
+      } finally {
+        await fs.rm(emptyLayoutsDir, { recursive: true, force: true });
+      }
     });
   });
 

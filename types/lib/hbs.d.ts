@@ -120,6 +120,35 @@ declare class ExpressHbs {
      */
     layoutPath(filename: string, layout: string, viewsDir: string | string[]): string | undefined;
     /**
+     * Returns ordered layout path candidates and their implicit safe roots.
+     *
+     * @param {string} filename
+     * @param {string} layout
+     * @param {string | string[]} viewsDir
+     * @param {boolean} [declarative]
+     * @returns {{ filename: string, root: string }[]}
+     */
+    _layoutPathCandidates(filename: string, layout: string, viewsDir: string | string[], declarative?: boolean): {
+        filename: string;
+        root: string;
+    }[];
+    /**
+     * Loads the first layout candidate that exists, preserving directory order.
+     *
+     * @param {string} filename
+     * @param {string} layout
+     * @param {boolean} useCache
+     * @param {string | string[]} viewsDir
+     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal, allowedRoot?: string, declarative?: boolean }} [context]
+     * @returns {Promise<Function[]>}
+     */
+    _cacheLayoutCandidates(filename: string, layout: string, useCache: boolean, viewsDir: string | string[], context?: {
+        seenLayouts?: Set<string>;
+        signal?: AbortSignal;
+        allowedRoot?: string;
+        declarative?: boolean;
+    }): Promise<Function[]>;
+    /**
      * Extracts a declared layout directive from template source.
      *
      * @param {string} str
@@ -182,12 +211,13 @@ declare class ExpressHbs {
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
      * @param {string | undefined} [allowedRoot]
-     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal }} [context]
+     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal, layoutBaseDir?: string }} [context]
      * @returns {Promise<Function[]>}
      */
     _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: string | undefined, context?: {
         seenLayouts?: Set<string>;
         signal?: AbortSignal;
+        layoutBaseDir?: string;
     }): Promise<Function[]>;
     /**
      * Callback/Promise wrapper for layout caching.
@@ -361,9 +391,10 @@ declare class ExpressHbs {
      * @param {string} filename
      * @param {string | string[]} viewsDir
      * @param {AbortSignal} [signal]
+     * @param {string} [layoutBaseDir]
      * @returns {Promise<{ compiled: Function, parentLayoutFile: string | undefined }>}
      */
-    _getUncachedLayoutInfo(filename: string, viewsDir: string | string[], signal?: AbortSignal): Promise<{
+    _getUncachedLayoutInfo(filename: string, viewsDir: string | string[], signal?: AbortSignal, layoutBaseDir?: string): Promise<{
         compiled: Function;
         parentLayoutFile: string | undefined;
     }>;

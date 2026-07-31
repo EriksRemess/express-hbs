@@ -82,7 +82,7 @@ declare class SourceNode {
      * @param {string | string[] | SourceNode} chunks
      */
     constructor(line: number, column: number, srcFile: string, chunks: string | string[] | SourceNode);
-    src: string;
+    children: any[];
     /**
      * @param {string | string[] | SourceNode} chunks
      * @returns {void}

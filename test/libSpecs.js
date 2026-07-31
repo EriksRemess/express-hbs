@@ -1105,6 +1105,34 @@ describe('lib helpers', () => {
       }
     });
 
+    it('detects uncached template changes when size and mtime are preserved', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-template-metadata-'));
+      const templateFile = path.join(tempRoot, 'index.hbs');
+
+      await fs.writeFile(templateFile, 'v1', 'utf8');
+
+      try {
+        hb.express({ viewsDir: tempRoot });
+        const renderOptions = { cache: false, settings: { views: tempRoot } };
+
+        assert.equal(await hb._renderFile(templateFile, null, renderOptions), 'v1');
+
+        const originalStat = await fs.stat(templateFile);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await fs.writeFile(templateFile, 'v2', 'utf8');
+        await fs.utimes(templateFile, originalStat.atimeMs / 1000, originalStat.mtimeMs / 1000);
+
+        const changedStat = await fs.stat(templateFile);
+        assert.equal(changedStat.size, originalStat.size);
+        assert.equal(changedStat.mtimeMs, originalStat.mtimeMs);
+        assert.notEqual(changedStat.ctimeMs, originalStat.ctimeMs);
+        assert.equal(await hb._renderFile(templateFile, null, renderOptions), 'v2');
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     it('cachePartials callback returns error for missing directory', async () => {
       const hb = hbs.create();
       hb.express({
@@ -1223,6 +1251,40 @@ describe('lib helpers', () => {
           hb._renderFile(path.join(viewsDir, 'added.hbs'), '{{> added}}', renderOptions),
           /partial added could not be found/i
         );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('preserves later partial directory precedence when an earlier duplicate changes', async () => {
+      const hb = hbs.create();
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-partial-precedence-'));
+      const firstPartialsDir = path.join(tempRoot, 'first');
+      const secondPartialsDir = path.join(tempRoot, 'second');
+      const viewsDir = path.join(tempRoot, 'views');
+      const firstPartial = path.join(firstPartialsDir, 'shared.hbs');
+
+      await fs.mkdir(firstPartialsDir, { recursive: true });
+      await fs.mkdir(secondPartialsDir, { recursive: true });
+      await fs.mkdir(viewsDir, { recursive: true });
+      await fs.writeFile(firstPartial, 'first', 'utf8');
+      await fs.writeFile(path.join(secondPartialsDir, 'shared.hbs'), 'second', 'utf8');
+
+      try {
+        hb.express({
+          partialsDir: [firstPartialsDir, secondPartialsDir],
+          viewsDir
+        });
+
+        const renderOptions = { cache: false, settings: { views: viewsDir } };
+        const templateFile = path.join(viewsDir, 'inline.hbs');
+
+        assert.equal(await hb._renderFile(templateFile, '{{> shared}}', renderOptions), 'second');
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await fs.writeFile(firstPartial, 'first-updated', 'utf8');
+
+        assert.equal(await hb._renderFile(templateFile, '{{> shared}}', renderOptions), 'second');
       } finally {
         await fs.rm(tempRoot, { recursive: true, force: true });
       }
