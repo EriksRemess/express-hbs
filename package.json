@@ -1,6 +1,6 @@
 {
   "name": "@eriksremess/express-hbs",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Fork of express-hbs updated for Node.js 26+ and Express 5.",
   "keywords": [
     "express5",
