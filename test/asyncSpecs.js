@@ -36,6 +36,20 @@ async function requestAll(app, users) {
 }
 
 describe('async', () => {
+  it('observes helper rejections after a synchronous render failure', async () => {
+    const hb = hbs.create();
+    hb.express();
+    const pending = Promise.withResolvers();
+    hb.registerAsyncHelper('later', () => pending.promise);
+    hb.registerHelper('fail', () => {
+      throw new Error('render failure');
+    });
+    await assert.rejects(hb._renderFile('/tmp/failed-render.hbs', '{{later}}{{fail}}!', {}), /render failure/);
+    pending.reject(new Error('late helper failure'));
+    // Give Node's unhandled-rejection tracking a turn before the test finishes.
+    await new Promise(resolve => setImmediate(resolve));
+  });
+
   it('should render all async helpers', async () => {
     const app = createAsyncApp(hbs.create(), 'production');
     const results = await requestAll(app, ['jt', 'anna', 'joe', 'jeff', 'jane']);

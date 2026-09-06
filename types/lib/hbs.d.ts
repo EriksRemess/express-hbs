@@ -46,7 +46,12 @@ declare class ExpressHbs {
     defaultLayoutTemplates: Function[];
     isPartialCachingComplete: boolean;
     hasAsyncHelpers: boolean;
-    partialsManifest: any[];
+    _partialsManifestGeneration: number;
+    /** @type {{ fullPath: string, name: string }[] | null} */
+    partialsManifest: {
+        fullPath: string;
+        name: string;
+    }[] | null;
     partialsManifestKey: any;
     partialsSourceCache: any;
     partialsMetadataCache: any;

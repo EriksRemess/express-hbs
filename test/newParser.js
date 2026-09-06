@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from '#test/testkit';
+import upstreamHandlebars from 'handlebars';
 
 const require = createRequire(import.meta.url);
 const upstreamParser = require('handlebars/dist/cjs/handlebars/compiler/base.js');
@@ -723,9 +724,9 @@ test('compiled partials keep their original runtime helpers', () => {
   assert.equal(template({ name: 'MiXeD' }), 'Hello MIXED');
 });
 
-test('#each block params preserve the outer context', () => {
+test('#each block params preserve the item and explicit parent contexts', () => {
   const template = handlebars.compile(
-    '{{someVal}}|{{#each profiles as |profile|}}{{profile.username}}:{{someVal}}|{{/each}}'
+    '{{someVal}}|{{#each profiles as |profile|}}{{profile.username}}:{{someVal}}:{{../someVal}}|{{/each}}'
   );
 
   assert.equal(
@@ -736,8 +737,124 @@ test('#each block params preserve the outer context', () => {
         { username: 'u2' }
       ]
     }),
-    'ROOT|u1:ROOT|u2:ROOT|'
+    'ROOT|u1:INNER1:ROOT|u2::ROOT|'
   );
+});
+
+test('#each aliases preserve item context for arrays, objects and iterables', () => {
+  const source = '{{#each items as |item key|}}{{name}}/{{item.name}}/{{../name}}/{{key}};{{/each}}';
+  const item = { name: 'child' };
+  for (const items of [[item], { first: item }, new Set([item])]) {
+    const context = { name: 'parent', items };
+    assert.equal(handlebars.compile(source)(context), upstreamHandlebars.compile(source)(context));
+  }
+});
+
+test('escaped mustaches and quoted arguments match upstream rendering', () => {
+  const sources = [
+    String.raw`\{{name}}`,
+    String.raw`\{{{name}}} {{name}}`,
+    String.raw`\{{unfinished`,
+    String.raw`a\{{name}} b\{{name}} {{name}}`,
+    String.raw`{{echo "C:\temp\file"}}`,
+    String.raw`{{echo "a\\b"}}`,
+    String.raw`{{echo "a\'b"}}`,
+    String.raw`{{echo 'a\"b'}}`,
+    String.raw`{{echo "a\"b"}}`,
+    String.raw`{{echo 'a\'b'}}`
+  ];
+  for (let count = 2; count <= 5; count += 1) {
+    sources.push('\\'.repeat(count) + '{{name}}');
+  }
+  const local = handlebars.create();
+  const upstream = upstreamHandlebars.create();
+  local.registerHelper('echo', value => value);
+  upstream.registerHelper('echo', value => value);
+  for (const source of sources) {
+    const context = { name: 'value' };
+    assert.equal(local.compile(source)(context), upstream.compile(source)(context), source);
+  }
+});
+
+test('trailing backslashes in quoted arguments match upstream', () => {
+  const local = handlebars.create();
+  const upstream = upstreamHandlebars.create();
+  const echo = (...args) => {
+    const options = args.pop();
+    return args.length ? args[0] : options.hash.value;
+  };
+  local.registerHelper('echo', echo);
+  upstream.registerHelper('echo', echo);
+
+  for (const quote of ['"', '\'']) {
+    for (let count = 1; count <= 4; count += 1) {
+      const value = 'C:' + '\\'.repeat(count);
+      const literal = quote + value + quote;
+      const sources = [
+        `{{echo ${literal}}}`,
+        `{{echo ${literal}~}}`,
+        `{{{echo ${literal}}}}`,
+        `{{echo value=${literal}}}`,
+        `{{echo (echo ${literal})}}`,
+        `{{#with ${literal} as |value|}}{{value}}{{/with}}`
+      ];
+      for (const source of sources) {
+        assert.equal(local.compile(source)({}), value, source);
+        assert.equal(local.compile(source)({}), upstream.compile(source)({}), source);
+        assert.deepEqual(normalizeAst(parse(source)), normalizeAst(upstreamParser.parse(source)), source);
+      }
+    }
+  }
+});
+
+test('quoted-string termination distinguishes escaped and closing quotes', () => {
+  const local = handlebars.create();
+  const upstream = upstreamHandlebars.create();
+  local.registerHelper('echo', value => value);
+  upstream.registerHelper('echo', value => value);
+  const sources = [
+    String.raw`{{echo "a\"b\"}}`,
+    String.raw`{{echo 'a\'b\'}}`,
+    String.raw`{{echo "a\"}}b"}}`,
+    String.raw`{{echo "C:\\" suffix=name}}`,
+    String.raw`{{#with "a\" as |fake| b" as |value|}}{{value}}{{/with}}`
+  ];
+  for (const source of sources) {
+    assert.equal(local.compile(source)({}), upstream.compile(source)({}), source);
+    assert.deepEqual(normalizeAst(parse(source)), normalizeAst(upstreamParser.parse(source)), source);
+  }
+  for (const source of [
+    '{{echo "unfinished}}',
+    "{{echo 'unfinished}}",
+    String.raw`{{echo "C:\\" "next"}}`
+  ]) {
+    assert.throws(() => parse(source), undefined, source);
+    assert.throws(() => upstreamParser.parse(source), undefined, source);
+  }
+});
+
+test('inverted blocks and mixed inverse chains match upstream', () => {
+  const sources = [
+    '{{^items}}empty{{/items}}',
+    '{{^items}}empty{{else}}full{{/items}}',
+    '{{#items}}full{{^}}empty{{/items}}',
+    '{{#if a}}A{{else unless b}}B{{else}}C{{/if}}',
+    '{{#if a}}A{{else unless b}}B{{else with item}}{{name}}{{else}}C{{/if}}',
+    'start\n{{^items}}\nempty\n{{else}}\nfull\n{{/items}}\nend',
+    ' x {{~^items~}} empty {{~else~}} full {{~/items~}} y '
+  ];
+  for (const source of sources) {
+    for (const context of [
+      { items: [], a: false, b: false },
+      { items: ['item'], a: true, b: true },
+      { items: [], a: false, b: true, item: { name: 'child' } },
+      { items: [], a: false, b: true }
+    ]) {
+      assert.equal(handlebars.compile(source)(context), upstreamHandlebars.compile(source)(context), source);
+    }
+    assert.deepEqual(normalizeAst(parse(source)), normalizeAst(upstreamParser.parse(source)), source);
+  }
+  assert.throws(() => parse('{{#if a}}A{{else unless b}}B{{/unless}}'), /doesn't match/);
 });
 
 test('helpers can access the current partial name', () => {

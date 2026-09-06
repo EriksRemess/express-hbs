@@ -1,5 +1,6 @@
 import { HandlebarsEnvironment } from '#handlebars/base';
 import handlebars from '#handlebars';
+import runtime from '#handlebars/handlebars.runtime';
 import Exception from '#handlebars/exception';
 import { moveHelperToHooks } from '#handlebars/helpers';
 import {
@@ -18,6 +19,34 @@ import { afterEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
 
 describe('handlebars unit internals', () => {
+  it('creates isolated instances from full and runtime-only instances', () => {
+    for (const root of [handlebars, runtime]) {
+      const parent = root.create();
+      parent.registerHelper('parentOnly', () => 'parent');
+      const child = parent.create();
+      assert.notEqual(child, parent);
+      assert.equal(child.helpers.parentOnly, undefined);
+      assert.equal(typeof child.create, 'function');
+      assert.equal(typeof child.compile, typeof root.compile);
+    }
+  });
+
+  it('keeps reserved prototype names denied when defaults allow access', () => {
+    const hb = handlebars.create();
+    hb.registerHelper('typeOf', value => typeof value);
+    const render = hb.compile('{{typeOf (lookup value "constructor")}}/{{typeOf (lookup value "__proto__")}}');
+    for (const overrides of [{}, {
+      allowedProtoMethods: { constructor: false },
+      allowedProtoProperties: JSON.parse('{"__proto__":false}')
+    }]) {
+      assert.equal(render({ value: {} }, {
+        allowProtoMethodsByDefault: true,
+        allowProtoPropertiesByDefault: true,
+        ...overrides
+      }), 'undefined/undefined');
+    }
+  });
+
   const originalLoggerLevel = logger.level;
   const originalLoggerLog = logger.log;
   const originalConsoleWarn = console.warn;

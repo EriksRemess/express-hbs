@@ -4,6 +4,8 @@ const renderWithoutOptions = hbs.express();
 renderWithoutOptions('/tmp/example.hbs', {}, (_err, _html) => {});
 
 const isolated = hbs.create();
+const handlebars = isolated.handlebars.create();
+handlebars.create().compile('{{value}}')({ value: 'example' });
 const renderWithDisabledDefaultLayout = isolated.express({
   defaultLayout: false,
   viewsDir: ['views-a', 'views-b'],
