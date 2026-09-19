@@ -1,3 +1,5 @@
+export type ResolverCache = Map<string, Promise<unknown>> | Record<string, Promise<unknown>>;
+export declare const resolverPendingEntriesKey: unique symbol;
 /**
  * Creates and stores an async placeholder id.
  *
@@ -6,7 +8,7 @@
  * @param {unknown} context
  * @returns {string}
  */
-export function resolve(cache: ResolverCache, fn: (context: unknown, cb: (value: unknown) => void) => void, context: unknown): string;
+export declare function resolve(cache: ResolverCache, fn: (context: unknown, cb: (value: unknown) => void) => void, context: unknown): string;
 /**
  * Resolves all pending async helper placeholders in cache.
  *
@@ -14,7 +16,11 @@ export function resolve(cache: ResolverCache, fn: (context: unknown, cb: (value:
  * @param {(err: Error | null, resolvedCache?: Record<string, unknown>) => void} [callback]
  * @returns {Promise<Record<string, unknown>> | void}
  */
-export function done(cache: ResolverCache, callback?: (err: Error | null, resolvedCache?: Record<string, unknown>) => void): Promise<Record<string, unknown>> | void;
-export const resolverPendingEntriesKey: unique symbol;
-export function hasResolvers(text: unknown): boolean;
-export type ResolverCache = Map<string, Promise<unknown>> | Record<string, Promise<unknown>>;
+export declare function done(cache: ResolverCache, callback?: (err: Error | null, resolvedCache?: Record<string, unknown>) => void): Promise<Record<string, unknown>> | void;
+/**
+ * Checks whether string still contains unresolved async placeholders.
+ *
+ * @param {unknown} text
+ * @returns {boolean}
+ */
+export declare const hasResolvers: (text: unknown) => boolean;

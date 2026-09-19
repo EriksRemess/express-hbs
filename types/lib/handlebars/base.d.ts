@@ -1,16 +1,12 @@
+import { createFrame } from '#handlebars/utils';
+import logger from '#handlebars/logger';
 /**
  * Shared Handlebars runtime environment for helpers, partials, and decorators.
  */
-export class HandlebarsEnvironment {
-    /**
-     * @param {Record<string, Function>} [helpers]
-     * @param {Record<string, string | Function>} [partials]
-     * @param {Record<string, Function>} [decorators]
-     */
-    constructor(helpers?: Record<string, Function>, partials?: Record<string, string | Function>, decorators?: Record<string, Function>);
-    helpers: any;
-    partials: any;
-    decorators: any;
+export declare class HandlebarsEnvironment {
+    helpers: object;
+    partials: object;
+    decorators: object;
     helperRevision: number;
     partialRevision: number;
     decoratorRevision: number;
@@ -21,6 +17,12 @@ export class HandlebarsEnvironment {
         log(level: string | number, ...message: unknown[]): void;
     };
     log: (level: string | number, ...message: unknown[]) => void;
+    /**
+     * @param {Record<string, Function>} [helpers]
+     * @param {Record<string, string | Function>} [partials]
+     * @param {Record<string, Function>} [decorators]
+     */
+    constructor(helpers?: Record<string, Function>, partials?: Record<string, string | Function>, decorators?: Record<string, Function>);
     /**
      * @param {string | Record<string, Function>} name
      * @param {Function} [fn]
@@ -61,6 +63,4 @@ export class HandlebarsEnvironment {
      */
     resetLoggedPropertyAccesses(): void;
 }
-import { createFrame } from '#handlebars/utils';
-import logger from '#handlebars/logger';
 export { createFrame, logger };

@@ -4,7 +4,7 @@
  * @param {Record<string, unknown>} runtimeOptions
  * @returns {{ properties: { whitelist: object, defaultValue: unknown }, methods: { whitelist: object, defaultValue: unknown } }}
  */
-export function createProtoAccessControl(runtimeOptions: Record<string, unknown>): {
+export declare function createProtoAccessControl(runtimeOptions: Record<string, unknown>): {
     properties: {
         whitelist: object;
         defaultValue: unknown;
@@ -22,7 +22,7 @@ export function createProtoAccessControl(runtimeOptions: Record<string, unknown>
  * @param {string} propertyName
  * @returns {boolean}
  */
-export function resultIsAllowed(result: unknown, protoAccessControl: {
+export declare function resultIsAllowed(result: unknown, protoAccessControl: {
     properties: object;
     methods: object;
 }, propertyName: string): boolean;
@@ -31,4 +31,4 @@ export function resultIsAllowed(result: unknown, protoAccessControl: {
  *
  * @returns {void}
  */
-export function resetLoggedProperties(): void;
+export declare function resetLoggedProperties(): void;

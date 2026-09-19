@@ -2,6 +2,7 @@
  * Generic AST visitor used by the compiler and whitespace-control passes.
  */
 export default class Visitor {
+    current: any;
     parents: any[];
     mutating: boolean;
     /**
@@ -36,7 +37,6 @@ export default class Visitor {
     accept(object: {
         type?: string;
     }): unknown;
-    current: any;
     /**
      * Visits a `Program` node.
      *

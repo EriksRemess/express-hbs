@@ -2,6 +2,8 @@
  * Handlebars-flavored error with optional location metadata from the AST.
  */
 export default class Exception extends Error {
+    lineNumber: number;
+    endLineNumber: number;
     /**
      * @param {string} message
      * @param {{ loc?: { start: { line: number, column: number }, end: { line: number, column: number } } }} [node]
@@ -18,6 +20,4 @@ export default class Exception extends Error {
             };
         };
     });
-    lineNumber: number;
-    endLineNumber: number;
 }

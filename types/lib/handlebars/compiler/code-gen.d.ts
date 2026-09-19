@@ -1,13 +1,46 @@
 /**
+ * Minimal source node used by the local code generator.
+ */
+declare class SourceNode {
+    children: any[];
+    /**
+     * @param {number} line
+     * @param {number} column
+     * @param {string} srcFile
+     * @param {string | string[] | SourceNode} chunks
+     */
+    constructor(line: number, column: number, srcFile: string, chunks: string | string[] | SourceNode);
+    /**
+     * @param {string | string[] | SourceNode} chunks
+     * @returns {void}
+     */
+    add(chunks: string | string[] | SourceNode): void;
+    /**
+     * @param {string | string[] | SourceNode} chunks
+     * @returns {void}
+     */
+    prepend(chunks: string | string[] | SourceNode): void;
+    /**
+     * @returns {{ code: string }}
+     */
+    toStringWithSourceMap(): {
+        code: string;
+    };
+    /**
+     * @returns {string}
+     */
+    toString(): string;
+}
+/**
  * Small utility that assembles generated JavaScript fragments.
  */
 export default class CodeGen {
+    srcFile: string;
+    source: any[];
     /**
      * @param {string} srcFile
      */
     constructor(srcFile: string);
-    srcFile: string;
-    source: any[];
     /**
      * @returns {boolean}
      */
@@ -70,38 +103,5 @@ export default class CodeGen {
      * @returns {SourceNode}
      */
     generateArray(entries: unknown[]): SourceNode;
-}
-/**
- * Minimal source node used by the local code generator.
- */
-declare class SourceNode {
-    /**
-     * @param {number} line
-     * @param {number} column
-     * @param {string} srcFile
-     * @param {string | string[] | SourceNode} chunks
-     */
-    constructor(line: number, column: number, srcFile: string, chunks: string | string[] | SourceNode);
-    children: any[];
-    /**
-     * @param {string | string[] | SourceNode} chunks
-     * @returns {void}
-     */
-    add(chunks: string | string[] | SourceNode): void;
-    /**
-     * @param {string | string[] | SourceNode} chunks
-     * @returns {void}
-     */
-    prepend(chunks: string | string[] | SourceNode): void;
-    /**
-     * @returns {{ code: string }}
-     */
-    toStringWithSourceMap(): {
-        code: string;
-    };
-    /**
-     * @returns {string}
-     */
-    toString(): string;
 }
 export {};

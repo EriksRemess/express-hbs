@@ -4,7 +4,7 @@
  * @param {{ registerHelper(name: string, fn: Function): void }} instance
  * @returns {void}
  */
-export function registerDefaultHelpers(instance: {
+export declare function registerDefaultHelpers(instance: {
     registerHelper(name: string, fn: Function): void;
 }): void;
 /**
@@ -15,7 +15,7 @@ export function registerDefaultHelpers(instance: {
  * @param {boolean} keepHelper
  * @returns {void}
  */
-export function moveHelperToHooks(instance: {
+export declare function moveHelperToHooks(instance: {
     helpers: Record<string, Function>;
     hooks: Record<string, Function>;
 }, helperName: string, keepHelper: boolean): void;

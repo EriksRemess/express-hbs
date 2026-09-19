@@ -1,10 +1,8 @@
-declare const _default: ExpressHbs;
-export default _default;
 export type AnyObject = Record<string, unknown>;
 export type NodeStyleCallback = (err: Error | null, value?: unknown) => void;
 export type ExpressRenderCallback = (err: Error | null, html: string | null) => void;
 export type ExpressRenderFunction = (filename: string, sourceOrOptions: string | AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback) => void;
-export type LocalHandlebars = import("./handlebars.d.ts").LocalHandlebars;
+export type LocalHandlebars = import('./handlebars.d.ts').LocalHandlebars;
 export type CompileHook = (instance: ExpressHbs, source: string, filename?: string) => Function;
 export type EngineOptions = AnyObject & {
     extname?: string;
@@ -72,6 +70,10 @@ declare class ExpressHbs {
     onCompile: CompileHook | undefined;
     _engineHelperNames: Set<any>;
     _engineHelpersHandlebars: import("./handlebars.d.ts").LocalHandlebars;
+    /**
+     * Initializes engine state and caches.
+     */
+    constructor();
     /**
      * Syncs convenience aliases with the active Handlebars instance.
      *
@@ -412,7 +414,7 @@ declare class ExpressHbs {
      * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
      */
     _getUncachedTemplateInfo(filename: string, viewsDir: string | string[], signal?: AbortSignal): Promise<{
-        type: "template";
+        type: 'template';
         source: string;
         template: Function;
         declaredLayout: string | undefined;
@@ -429,7 +431,7 @@ declare class ExpressHbs {
      * @returns {Promise<{ type: 'template', source: string, template: Function, declaredLayout: string | undefined, declaredLayoutFile: string | undefined }>}
      */
     _getSourceTemplate(filename: string, source: string | null, useCache: boolean, viewsDir: string | string[], signal?: AbortSignal): Promise<{
-        type: "template";
+        type: 'template';
         source: string;
         template: Function;
         declaredLayout: string | undefined;
@@ -523,3 +525,5 @@ declare class ExpressHbs {
      */
     ___express(filename: string, sourceOrOptions: AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback): void;
 }
+declare const _default: ExpressHbs;
+export default _default;

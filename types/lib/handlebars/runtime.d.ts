@@ -5,7 +5,7 @@
  * @param {Record<string, unknown>} env
  * @returns {Function}
  */
-export function template(templateSpec: {
+export declare function template(templateSpec: {
     main?: Function;
     main_d?: Function;
     compilerOptions?: unknown;

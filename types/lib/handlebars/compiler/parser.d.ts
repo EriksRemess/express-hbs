@@ -5,7 +5,7 @@
  * @param {{ srcName?: string }} options
  * @returns {object}
  */
-export function parseWithoutProcessing(input: string | {
+export declare function parseWithoutProcessing(input: string | {
     type: string;
 }, options: {
     srcName?: string;
@@ -17,14 +17,14 @@ export function parseWithoutProcessing(input: string | {
  * @param {{ ignoreStandalone?: boolean, srcName?: string }} options
  * @returns {object}
  */
-export function parse(input: string | {
+export declare function parse(input: string | {
     type: string;
 }, options: {
     ignoreStandalone?: boolean;
     srcName?: string;
 }): object;
-declare namespace _default {
-    export { parse };
-    export { parseWithoutProcessing };
-}
+declare const _default: {
+    parse: typeof parse;
+    parseWithoutProcessing: typeof parseWithoutProcessing;
+};
 export default _default;

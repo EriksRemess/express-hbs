@@ -5,7 +5,7 @@
  * @param {Record<string, unknown>} options
  * @returns {unknown}
  */
-export function precompile(input: string | {
+export declare function precompile(input: string | {
     type: string;
 }, options: Record<string, unknown>): unknown;
 /**
@@ -16,6 +16,6 @@ export function precompile(input: string | {
  * @param {Record<string, unknown>} env
  * @returns {Function}
  */
-export function compile(input: string | {
+export declare function compile(input: string | {
     type: string;
 }, options: Record<string, unknown>, env: Record<string, unknown>): Function;

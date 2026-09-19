@@ -1,8 +1,35 @@
-export default JavaScriptCompiler;
+import CodeGen from '#handlebars/compiler/code-gen';
 /**
  * Compiles the Handlebars opcode stream into an executable template function.
  */
 declare class JavaScriptCompiler {
+    environment: Record<string, unknown>;
+    options: Record<string, unknown>;
+    stringParams: unknown;
+    trackIds: unknown;
+    precompile: boolean;
+    forceBuffer: boolean;
+    name: unknown;
+    isChild: boolean;
+    context: Record<string, unknown>;
+    stackSlot: number;
+    stackVars: any[];
+    aliases: object;
+    registers: object;
+    hashes: any[];
+    compileStack: any[];
+    inlineStack: any[];
+    blockParams: any[];
+    useDepths: any;
+    useBlockParams: boolean;
+    useDecorators: boolean;
+    decorators: CodeGen;
+    lastContext: any;
+    source: CodeGen;
+    pendingLocation: any;
+    pendingContent: any;
+    hash: any;
+    lastHelper: (string | CodeGen)[];
     /**
      * Resolves a property access expression for generated code.
      *
@@ -10,7 +37,7 @@ declare class JavaScriptCompiler {
      * @param {string} name
      * @returns {Array<string | import('#handlebars/compiler/code-gen').default>}
      */
-    nameLookup(parent: string | import("#handlebars/compiler/code-gen").default, name: string): Array<string | import("#handlebars/compiler/code-gen").default>;
+    nameLookup(parent: string | import('#handlebars/compiler/code-gen').default, name: string): Array<string | import('#handlebars/compiler/code-gen').default>;
     /**
      * Emits a lookup that walks up the depth stack at runtime.
      *
@@ -26,7 +53,7 @@ declare class JavaScriptCompiler {
      * @param {boolean=} explicit
      * @returns {Array<unknown> | import('#handlebars/compiler/code-gen').default}
      */
-    appendToBuffer(source: string | Array<unknown> | import("#handlebars/compiler/code-gen").default, location?: Record<string, unknown> | undefined, explicit?: boolean | undefined): Array<unknown> | import("#handlebars/compiler/code-gen").default;
+    appendToBuffer(source: string | Array<unknown> | import('#handlebars/compiler/code-gen').default, location?: Record<string, unknown> | undefined, explicit?: boolean | undefined): Array<unknown> | import('#handlebars/compiler/code-gen').default;
     initializeBuffer(): string;
     /**
      * Emits a guarded property lookup through the runtime `lookupProperty` helper.
@@ -35,7 +62,7 @@ declare class JavaScriptCompiler {
      * @param {string} name
      * @returns {Array<string | import('#handlebars/compiler/code-gen').default>}
      */
-    internalNameLookup(parent: string | import("#handlebars/compiler/code-gen").default, name: string): Array<string | import("#handlebars/compiler/code-gen").default>;
+    internalNameLookup(parent: string | import('#handlebars/compiler/code-gen').default, name: string): Array<string | import('#handlebars/compiler/code-gen').default>;
     lookupPropertyFunctionIsUsed: boolean;
     /**
      * Compiles a parsed template environment into a template function or precompiled spec object.
@@ -47,47 +74,24 @@ declare class JavaScriptCompiler {
      * @returns {unknown}
      */
     compile(environment: Record<string, unknown>, options: Record<string, unknown>, context?: Record<string, unknown> | undefined, asObject?: boolean | undefined): unknown;
-    environment: Record<string, unknown>;
-    options: Record<string, unknown>;
-    stringParams: unknown;
-    trackIds: unknown;
-    precompile: boolean;
-    forceBuffer: boolean;
-    name: unknown;
-    isChild: boolean;
-    context: Record<string, unknown>;
-    stackSlot: number;
-    stackVars: any[];
-    aliases: any;
-    registers: any;
-    hashes: any[];
-    compileStack: any[];
-    inlineStack: any[];
-    blockParams: any[];
-    useDepths: any;
-    useBlockParams: any;
-    useDecorators: boolean;
-    decorators: any;
     /**
      * Resets per-compilation state shared by opcode emitters.
      */
     preamble(): void;
-    lastContext: any;
-    source: CodeGen;
     /**
      * Builds the final function body for the current program.
      *
      * @param {boolean} asObject
      * @returns {Function | import('#handlebars/compiler/code-gen').default}
      */
-    createFunctionContext(asObject: boolean): Function | import("#handlebars/compiler/code-gen").default;
+    createFunctionContext(asObject: boolean): Function | import('#handlebars/compiler/code-gen').default;
     /**
      * Folds adjacent buffer appends into the smallest source representation available.
      *
      * @param {string} varDeclarations
      * @returns {import('#handlebars/compiler/code-gen').default}
      */
-    mergeSource(varDeclarations: string): import("#handlebars/compiler/code-gen").default;
+    mergeSource(varDeclarations: string): import('#handlebars/compiler/code-gen').default;
     /**
      * Generates the fallback `lookupProperty` helper declaration used by compiled templates.
      *
@@ -97,8 +101,6 @@ declare class JavaScriptCompiler {
     blockValue(name: any): void;
     ambiguousBlockValue(): void;
     appendContent(content: any): void;
-    pendingLocation: any;
-    pendingContent: any;
     append(): void;
     appendEscaped(): void;
     getContext(depth: any): void;
@@ -111,7 +113,6 @@ declare class JavaScriptCompiler {
     pushStringParam(string: any, type: any, idType: any, idName: any, idChild: any): void;
     emptyHash(omitEmpty: any): void;
     pushHash(): void;
-    hash: any;
     popHash(): void;
     pushString(string: any): void;
     pushLiteral(value: any): void;
@@ -128,7 +129,6 @@ declare class JavaScriptCompiler {
     itemsSeparatedBy(items: unknown[], separator: string): unknown[];
     invokeKnownHelper(paramSize: any, name: any): void;
     invokeAmbiguous(name: any, helperCall: any): void;
-    lastHelper: (string | CodeGen)[];
     invokePartial(isDynamic: any, name: any, indent: any): void;
     assignToHash(key: any): void;
     pushId(type: any, name: any, child: any): void;
@@ -216,11 +216,11 @@ declare class JavaScriptCompiler {
     aliasable(name: any): any;
     setupHelper(paramSize: any, name: any, blockHelper: any): {
         params: any[];
-        paramsInit: any;
+        paramsInit: string | object;
         name: (string | CodeGen)[];
         callParams: any[];
     };
-    setupParams(helper: any, paramSize: any, params: any): any;
-    setupHelperArgs(helper: any, paramSize: any, params: any, useRegister: any): any;
+    setupParams(helper: any, paramSize: any, params: any): object;
+    setupHelperArgs(helper: any, paramSize: any, params: any, useRegister: any): "" | object;
 }
-import CodeGen from '#handlebars/compiler/code-gen';
+export default JavaScriptCompiler;

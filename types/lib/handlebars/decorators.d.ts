@@ -4,6 +4,6 @@
  * @param {{ registerDecorator(name: string, fn: Function): void }} instance
  * @returns {void}
  */
-export function registerDefaultDecorators(instance: {
+export declare function registerDefaultDecorators(instance: {
     registerDecorator(name: string, fn: Function): void;
 }): void;

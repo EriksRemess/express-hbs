@@ -1,16 +1,18 @@
+import Visitor from '#handlebars/compiler/visitor';
 /**
  * Compiler pass that applies Handlebars standalone and strip-whitespace rules.
  */
 export default class WhitespaceControl extends Visitor {
+    options: {
+        ignoreStandalone?: boolean;
+    };
+    isRootSeen: boolean;
     /**
      * @param {{ ignoreStandalone?: boolean }} options
      */
     constructor(options?: {
         ignoreStandalone?: boolean;
     });
-    options: {
-        ignoreStandalone?: boolean;
-    };
     /**
      * Applies whitespace processing to a program body.
      *
@@ -20,7 +22,6 @@ export default class WhitespaceControl extends Visitor {
     Program(program: {
         body: object[];
     }): object;
-    isRootSeen: boolean;
     /**
      * @param {object} block
      * @returns {object}
@@ -93,4 +94,3 @@ export default class WhitespaceControl extends Visitor {
         close: boolean | undefined;
     };
 }
-import Visitor from '#handlebars/compiler/visitor';

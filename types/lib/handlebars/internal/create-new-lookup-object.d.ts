@@ -11,5 +11,5 @@
  * @param {...unknown} sources
  * @returns {object}
  */
-export function assignLookupObject(target: object, ...sources: unknown[]): object;
-export function createNewLookupObject(...sources: any[]): any;
+export declare function assignLookupObject(target: object, ...sources: unknown[]): object;
+export declare function createNewLookupObject(...sources: any[]): object;

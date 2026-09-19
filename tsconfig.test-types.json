@@ -7,11 +7,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2024",
-    "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
       "@eriksremess/express-hbs": [
-        "types/lib/hbs.d.ts"
+        "./types/lib/hbs.d.ts"
       ]
     },
     "strict": true,
