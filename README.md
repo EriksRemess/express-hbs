@@ -275,6 +275,24 @@ hbs.registerAsyncHelper('readFile', (filename, cb) => {
 });
 ```
 
+The final argument also exposes Handlebars options for promise-returning helpers,
+including hash arguments and block functions:
+
+```js
+hbs.registerAsyncHelper('greet', async (name, options) =>
+  `${options.hash.prefix ?? 'Hello'}, ${name}`
+);
+
+hbs.registerAsyncHelper('loadUser', async function(options) {
+  const user = await findUser(this.userId);
+  return options.fn(user);
+});
+```
+
+For compatibility with callback helpers, this options argument is callable as a
+completion callback. Helpers that declare both `options` and `cb` receive them
+as separate arguments.
+
 ## i18n support
 
 Express-hbs supports [i18n](https://github.com/mashpie/i18n-node)

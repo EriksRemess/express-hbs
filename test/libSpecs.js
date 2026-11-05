@@ -6,6 +6,7 @@ import { fromHere } from '#test/fixtures/paths';
 import { describe, it } from '#test/testkit';
 import handlebars from '#handlebars';
 import assert from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,6 +34,20 @@ describe('lib helpers', () => {
   const issuesDir = fromHere(import.meta.url, 'issues');
 
   describe('resolver', () => {
+    it('does not call the completion callback again when that callback throws', () => {
+      const output = execFileSync(process.execPath, ['--input-type=module', '--eval', `
+        import { done } from ${JSON.stringify(new URL('../lib/resolver.js', import.meta.url).href)};
+        let calls = 0;
+        process.once('unhandledRejection', error => console.log(error.message));
+        done({}, () => {
+          calls += 1;
+          if (calls === 1) throw new Error('consumer failure');
+        });
+        setImmediate(() => console.log('calls=' + calls));
+      `], { encoding: 'utf8', timeout: 5000 });
+      assert.equal(output.trim(), 'consumer failure\ncalls=1');
+    });
+
     it('should detect resolver token at string start', () => {
       assert.equal(hasResolvers('__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'), true);
       assert.equal(hasResolvers('__aSyNcId__&lt;_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'), true);
@@ -195,6 +210,32 @@ describe('lib helpers', () => {
   });
 
   describe('hbs internals', () => {
+    it('preserves exact template text, including whitespace and comment-only partials', async () => {
+      const hb = hbs.create();
+      const compiledSources = [];
+      hb.express({
+        onCompile(engine, source) {
+          compiledSources.push(source);
+          return engine.handlebars.compile(source);
+        }
+      });
+      for (const [source, expected] of [
+        ['X', 'X'],
+        ['{{value}}', '&lt;X&gt;'],
+        ['{{{value}}}', '<X>'],
+        [' {{value}} ', ' &lt;X&gt; '],
+        ['{{! comment }}', ''],
+        ['{{!-- comment --}}', ''],
+        ['', '']
+      ]) {
+        assert.equal(hb.compile(source)({ value: '<X>' }), expected);
+        assert.equal(compiledSources.at(-1), source);
+      }
+      hb.registerPartial('comment', '{{! comment }}');
+      hb.registerPartial('letter', 'X');
+      assert.equal(await hb._renderFile('/tmp/exact-whitespace.hbs', 'A{{> comment}}B{{> letter}}C', {}), 'ABXC');
+    });
+
     it('exposes template options helpers', () => {
       const hb = hbs.create();
       hb.updateTemplateOptions({ a: 1 });
@@ -1707,7 +1748,7 @@ describe('lib helpers', () => {
 
     it('compile throws when source is not a string', () => {
       const hb = hbs.create();
-      assert.throws(() => hb.compile(12), /registerPartial must be a string/);
+      assert.throws(() => hb.compile(12), /Template source must be a string/);
     });
 
     it('resets onCompile when reconfiguring the same instance', async () => {
@@ -1732,7 +1773,7 @@ describe('lib helpers', () => {
       hb.express({ handlebars: external });
       assert.equal(
         await hb._renderFile('/tmp/inline.hbs', '{{externalOnly "x"}}', {}),
-        'external '
+        'external'
       );
 
       hb.express({});
@@ -1755,7 +1796,7 @@ describe('lib helpers', () => {
         }
       });
 
-      assert.equal(await hb._renderFile('/tmp/inline.hbs', '{{__ "x"}}', {}), 'translated ');
+      assert.equal(await hb._renderFile('/tmp/inline.hbs', '{{__ "x"}}', {}), 'translated');
 
       hb.express({});
       await assert.rejects(
@@ -2068,6 +2109,30 @@ describe('lib helpers', () => {
       );
     });
 
+    it('rejects expanding async cycles, including escaped and safe-string references', async () => {
+      const hb = hbs.create();
+      const firstId = '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__';
+      const secondId = '__aSyNcId__<_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__';
+      const replaceValue = hb._replaceValue;
+      hb._replaceValue = function (value, ...args) {
+        // Keep a regression from exhausting memory before the assertion can fail.
+        assert.ok(typeof value !== 'string' || value.length < 4096, 'Unexpected growing async result');
+        return replaceValue.call(this, value, ...args);
+      };
+      for (const values of [
+        { [firstId]: 'prefix' + firstId },
+        { [firstId]: new hb.SafeString(firstId + 'suffix') },
+        { [firstId]: 'a' + secondId, [secondId]: 'b' + firstId.replace('<', '&lt;') }
+      ]) {
+        const cache = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Promise.resolve(value)]));
+        await assert.rejects(hb._resolveAsyncHtml(cache, firstId), /unresolved async placeholder/i);
+      }
+      assert.equal(await hb._resolveAsyncHtml({
+        [firstId]: Promise.resolve(secondId + '/' + secondId),
+        [secondId]: Promise.resolve('done')
+      }, firstId), 'done/done');
+    });
+
     it('replaceValue returns input for non-string or empty replacement list', () => {
       const hb = hbs.create();
       assert.equal(hb._replaceValue(12, []), 12);
@@ -2097,6 +2162,18 @@ describe('lib helpers', () => {
         () => hb._renderWithLayouts(template, locals, [failingLayout]),
         /layout failed/
       );
+      assert.equal(locals.body, 'original');
+    });
+
+    it('preserves synchronous layout-local changes for outer layouts', () => {
+      const hb = hbs.create();
+      const outer = locals => `${locals.marker}[${locals.body}]`;
+      const inner = locals => {
+        locals.marker = 'updated';
+        return `INNER[${locals.body}]`;
+      };
+      const locals = { body: 'original' };
+      assert.equal(hb._renderWithLayouts(() => 'PAGE', locals, [outer, inner]), 'updated[INNER[PAGE]]');
       assert.equal(locals.body, 'original');
     });
 

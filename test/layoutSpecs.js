@@ -12,6 +12,65 @@ import path from 'node:path';
 const __dirname = dirnameFromMeta(import.meta.url);
 
 describe('layouts', () => {
+  it('allows child layout names beginning with two dots without permitting traversal', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-dots-'));
+    try {
+      const layoutsDir = path.join(root, 'layouts');
+      await fs.mkdir(layoutsDir);
+      await fs.writeFile(path.join(layoutsDir, '..layout.hbs'), 'LAYOUT[{{{body}}}]');
+      await fs.writeFile(path.join(root, 'outside.hbs'), 'OUTSIDE');
+      for (const restrictLayoutsTo of [undefined, layoutsDir]) {
+        const hb = hbs.create();
+        hb.express({ layoutsDir: [layoutsDir], restrictLayoutsTo });
+        assert.equal(await hb._renderFile(path.join(layoutsDir, 'page.hbs'), 'PAGE', {
+          layout: './..layout.hbs'
+        }), 'LAYOUT[PAGE]');
+        assert.equal((await hb.cacheLayout(path.join(layoutsDir, '..layout.hbs'), false))[0]({ body: 'PAGE' }), 'LAYOUT[PAGE]');
+        await assert.rejects(hb._renderFile(path.join(layoutsDir, 'page.hbs'), 'PAGE', {
+          layout: '../outside.hbs'
+        }), /does not reside in/);
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps cached parent resolution separate for overlapping layout directories', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-layout-cache-'));
+    try {
+      const sub = path.join(root, 'sub');
+      await fs.mkdir(sub);
+      await fs.writeFile(path.join(root, 'parent.hbs'), 'OUTER[{{{body}}}]');
+      await fs.writeFile(path.join(sub, 'parent.hbs'), 'INNER[{{{body}}}]');
+      await fs.writeFile(path.join(sub, 'child.hbs'), '{{!< parent}}CHILD[{{{body}}}]');
+      for (const cache of [false, true]) {
+        const hb = hbs.create();
+        hb.express({ layoutsDir: [root, sub], restrictLayoutsTo: root });
+        for (const [layout, expected] of [
+          ['sub/child', 'OUTER[CHILD[PAGE]]'],
+          ['child', 'INNER[CHILD[PAGE]]'],
+          ['sub/child', 'OUTER[CHILD[PAGE]]']
+        ]) {
+          assert.equal(await hb._renderFile(path.join(root, 'page.hbs'), 'PAGE', { layout, cache }), expected);
+        }
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves absolute layouts with only an explicit restriction root and rejects escapes', async () => {
+    const root = path.join(__dirname, 'views/disableLayoutDirective');
+    const hb = hbs.create();
+    hb.express({ restrictLayoutsTo: root });
+    assert.equal(stripWs(await hb._renderFile(path.join(root, 'aside.hbs'), 'PAGE', {
+      layout: path.join(root, 'layouts/default.hbs')
+    })), '<dld>PAGE</dld>');
+    await assert.rejects(hb._renderFile(path.join(root, 'aside.hbs'), 'PAGE', {
+      layout: path.join(__dirname, 'issues/53/default.hbs')
+    }), /does not reside in/);
+  });
+
   describe('layoutsDir', () => {
     let app;
 

@@ -50,6 +50,99 @@ const UPSTREAM_AST_SAMPLES = [
   '{{foo true false null undefined 12 -3 4.5}}'
 ];
 
+test('comments, literal paths and unescaped delimiters match upstream', () => {
+  const context = {
+    person: { name: { first: 'Alice' } },
+    this: 'literal',
+    'a(b': 'bracket',
+    "a'b": 'quote',
+    'a}}b': 'delimiter',
+    value: '<b>value</b>'
+  };
+  const cases = [
+    ["A{{! don't show this }}B", 'AB'],
+    ['A{{! unmatched ( }}B', 'AB'],
+    ['A {{~!-- ignore {{value}} here --~}} B', 'AB'],
+    ['A {{!-- ignore " ( --~}} B', 'A B'],
+    ['{{[person].name.first}}', 'Alice'],
+    ['{{person.[name].first}}', 'Alice'],
+    ['{{[this]}}', 'literal'],
+    ['{{[a(b]}}', 'bracket'],
+    ['{{#if [a(b]}}yes{{/if}}', 'yes'],
+    ["{{#if [a'b]}}yes{{/if}}", 'yes'],
+    ["{{[a'b]}}", 'quote'],
+    ['{{[a}}b]}}', 'delimiter'],
+    ['{{{echo "}}}"}}}', '}}}'],
+    ['A {{~{value}~}} B', 'A<b>value</b>B'],
+    ['A {{{value}~}} B', 'A <b>value</b>B'],
+    ['A {{~{value}}} B', 'A<b>value</b> B']
+  ];
+  for (const base of [upstreamHandlebars, handlebars]) {
+    const hb = base.create();
+    hb.registerHelper('echo', value => value);
+    for (const [source, expected] of cases) {
+      assert.equal(hb.compile(source)(context), expected, source);
+    }
+  }
+});
+
+test('parsed and precompiled ASTs preserve nullish literals and inverse-only blocks', () => {
+  const hb = handlebars.create();
+  hb.registerHelper('echo', value => String(value));
+  for (const [source, expected] of [
+    ['{{echo null}}', 'null'],
+    ['{{echo undefined}}', 'undefined'],
+    ['{{^value}}empty{{/value}}', 'empty']
+  ]) {
+    assert.equal(hb.compile(hb.parse(source))({}), expected);
+    const spec = Function(`return (${hb.precompile(hb.parse(source))})`)();
+    assert.equal(hb.template(spec)({}), expected);
+    const serializedAst = JSON.parse(JSON.stringify(hb.parse(source)));
+    assert.equal(hb.compile(serializedAst)({}), expected);
+    const serializedSpec = Function(`return (${hb.precompile(serializedAst)})`)();
+    assert.equal(hb.template(serializedSpec)({}), expected);
+  }
+});
+
+test('nested raw blocks preserve their literal contents', () => {
+  for (const base of [upstreamHandlebars, handlebars]) {
+    const hb = base.create();
+    hb.registerHelper('raw', options => options.fn());
+    for (const nestedName of ['raw', 'other']) {
+      const body = `a{{{{${nestedName}}}}}b{{{{/${nestedName}}}}}c`;
+      assert.equal(hb.compile(`{{{{raw}}}}${body}{{{{/raw}}}}`)({}), body);
+    }
+  }
+});
+
+test('literal path punctuation and non-ASCII and numeric hash keys match upstream', () => {
+  const context = { 'a[b': 'bracket', 'a]b': 'close', 'a\\b': 'slash', value: 'value' };
+  const cases = [
+    ['{{echo [a[b] value}}', 'bracket|value'],
+    ['{{echo [a\\]b] value}}', 'close|value'],
+    ['{{echo [a\\\\b] value}}', 'slash|value'],
+    ['{{#with [a\\]b] as |item|}}{{item}}{{/with}}', 'close'],
+    ['{{> [a[b]}}', 'partial'],
+    ['{{> [a\\]b]}}', 'partial'],
+    ['{{> [a\\\\b]}}', 'partial'],
+    ['{{hash 1="one" -1="negative" true="boolean" null="null" undefined="undefined"}}',
+      '-1:negative|1:one|null:null|true:boolean|undefined:undefined'],
+    ['{{hash [a.b]="dot" [a\\]b]="close" v\u0101rds="word"}}', 'a.b:dot|a]b:close|v\u0101rds:word'],
+    ['{{echo (hash [a[b]="bracket" 2="two")}}', '2:two|a[b:bracket']
+  ];
+  for (const base of [upstreamHandlebars, handlebars]) {
+    const hb = base.create();
+    hb.registerHelper('echo', (...args) => args.slice(0, -1).join('|'));
+    hb.registerHelper('hash', options => Object.keys(options.hash).sort().map(key => `${key}:${options.hash[key]}`).join('|'));
+    for (const name of Object.keys(context).slice(0, 3)) {
+      hb.registerPartial(name, 'partial');
+    }
+    for (const [source, expected] of cases) {
+      assert.equal(hb.compile(source)(context), expected, source);
+    }
+  }
+});
+
 test('parser handles valid repo templates', async () => {
   const files = await collectTemplates(SEARCH_DIRS);
   const checked = [];

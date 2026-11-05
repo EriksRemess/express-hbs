@@ -15,7 +15,7 @@ export type EngineOptions = AnyObject & {
     refreshPartialsManifest?: boolean;
     contentHelperName?: string;
     blockHelperName?: string;
-    handlebars?: LocalHandlebars;
+    handlebars?: import('./handlebars.d.ts').HandlebarsLike;
     i18n?: {
         __: Function;
         __n: Function;
@@ -299,11 +299,11 @@ declare class ExpressHbs {
     /**
      * Registers a Handlebars helper.
      *
-     * @param {string} name
-     * @param {Function} fn
+     * @param {string | Record<string, Function>} name
+     * @param {Function} [fn]
      * @returns {void}
      */
-    registerHelper(name: string, fn: Function): void;
+    registerHelper(name: string | Record<string, Function>, fn?: Function): void;
     /**
      * Registers a Handlebars partial by compiling the provided source.
      *

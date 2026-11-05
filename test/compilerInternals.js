@@ -3,6 +3,7 @@ import { parse, parseWithoutProcessing } from '#handlebars/compiler/parser';
 import Visitor from '#handlebars/compiler/visitor';
 import WhitespaceControl from '#handlebars/compiler/whitespace-control';
 import handlebars from '#handlebars';
+import runtimeHandlebars from '#handlebars/handlebars.runtime';
 import { describe, it } from '#test/testkit';
 import upstreamHandlebars from 'handlebars';
 import assert from 'node:assert';
@@ -49,6 +50,42 @@ function createComparisonRuntime(base) {
 }
 
 describe('compiler internals', () => {
+  it('emits __proto__ hash keys as own properties without changing prototypes', () => {
+    const hb = handlebars.create();
+    const value = { injected: true, includeZero: true };
+    hb.registerHelper('inspectHash', options => {
+      for (const hash of [options.hash, options.hashTypes, options.hashContexts, options.hashIds]) {
+        if (!hash) continue;
+        assert.equal(Object.getPrototypeOf(hash), Object.prototype);
+        assert.equal(Object.hasOwn(hash, '__proto__'), true);
+        assert.equal(hash.injected, undefined);
+      }
+      assert.equal(options.hash.normal, 'ok');
+      return 'checked';
+    });
+    for (const key of ['__proto__', '[__proto__]']) {
+      const source = `{{inspectHash ${key}=value normal="ok"}}`;
+      for (const options of [{}, { stringParams: true }, { trackIds: true }]) {
+        assert.equal(hb.compile(source, options)({ value }), 'checked');
+        const spec = Function(`return (${hb.precompile(source, options)})`)();
+        assert.equal(hb.template(spec)({ value }), 'checked');
+      }
+      assert.equal(hb.compile(`{{#if 0 ${key}=value}}yes{{else}}no{{/if}}`)({ value }), 'no');
+    }
+  });
+
+  it('renders precompiled specs with local full, runtime-only and upstream runtimes', () => {
+    const source = '{{#*inline "item"}}[{{name}}]{{/inline}}{{#each items}}{{> item}}{{else}}empty{{/each}}';
+    for (const compiler of [handlebars, upstreamHandlebars]) {
+      const spec = Function(`return (${compiler.precompile(source)})`)();
+      for (const runtime of [handlebars.create(), runtimeHandlebars.create(), upstreamHandlebars.create()]) {
+        const render = runtime.template(spec);
+        assert.equal(render({ items: [{ name: '<Alice>' }, { name: 'Bob' }] }), '[&lt;Alice&gt;][Bob]');
+        assert.equal(render({ items: [] }), 'empty');
+      }
+    }
+  });
+
   it('validates inputs and exposes lazy compile wrapper methods', () => {
     assert.throws(() => precompile(null), /You must pass a string or Handlebars AST to Handlebars.precompile/);
     assert.throws(() => compile(undefined), /You must pass a string or Handlebars AST to Handlebars.compile/);
@@ -435,6 +472,82 @@ describe('compiler internals', () => {
       () => compile(badAst, {}, hb)({}),
       /Unknown type: Nope/
     );
+  });
+
+  it('validates hidden AST children and rejects inherited compiler fields', () => {
+    const hb = handlebars.create();
+    hb.registerHelper('inspect', (value, options) => options.hash.probe ?? value);
+    const maliciousNumber = () => ({
+      type: 'NumberLiteral',
+      value: '(globalThis.__expressHbsAstInjectionProbe = true)'
+    });
+    const factories = [
+      () => {
+        const ast = hb.parse('{{inspect value}}');
+        Object.defineProperty(ast.body[0], 'hash', {
+          enumerable: false,
+          value: { type: 'Hash', pairs: [{ type: 'HashPair', key: 'probe', value: maliciousNumber() }] }
+        });
+        return ast;
+      },
+      () => {
+        const ast = hb.parse('{{inspect value}}');
+        delete ast.body[0].hash;
+        Object.setPrototypeOf(ast.body[0], {
+          hash: { type: 'Hash', pairs: [{ type: 'HashPair', key: 'probe', value: maliciousNumber() }] }
+        });
+        return ast;
+      },
+      () => {
+        const ast = hb.parse('{{inspect value}}');
+        ast.body[0].params = [maliciousNumber()];
+        Object.defineProperty(ast, 'body', { enumerable: false });
+        return ast;
+      },
+      () => {
+        const ast = hb.parse('{{inspect value}}');
+        ast.body[0].params = [maliciousNumber()];
+        ast.body[0].params.forEach = () => {};
+        return ast;
+      },
+      () => {
+        const ast = hb.parse('{{> missing}}');
+        Object.setPrototypeOf(ast.body[0], { program: program(content('inherited')) });
+        return ast;
+      },
+      () => {
+        const ast = hb.parse('{{inspect value probe=1}}');
+        ast.body[0].hash.pairs = [Object.create({ key: 'probe', value: maliciousNumber() })];
+        return ast;
+      },
+      ...[() => [], () => function() {}].map(createLiteral => () => {
+        const ast = hb.parse('{{inspect value}}');
+        ast.body[0].params = [Object.assign(createLiteral(), maliciousNumber())];
+        return ast;
+      }),
+      () => {
+        const ast = hb.parse('{{inspect value probe=1}}');
+        // Hash pairs are consumed directly, so even another valid AST type is invalid here.
+        ast.body[0].hash.pairs[0].type = 'Program';
+        ast.body[0].hash.pairs[0].body = [];
+        return ast;
+      }
+    ];
+    globalThis.__expressHbsAstInjectionProbe = false;
+    try {
+      for (const createAst of factories) {
+        assert.throws(() => hb.precompile(createAst()), /Invalid AST/);
+        assert.throws(() => hb.compile(createAst())({ value: 'safe' }), /Invalid AST/);
+        assert.equal(globalThis.__expressHbsAstInjectionProbe, false);
+      }
+      const ast = hb.parse('{{inspect value probe=42}}');
+      Object.defineProperty(ast, 'body', { enumerable: false });
+      Object.defineProperty(ast.body[0], 'hash', { enumerable: false });
+      assert.equal(hb.compile(ast)({ value: 'safe' }), '42');
+      assert.equal(hb.template(Function(`return (${hb.precompile(ast)})`)())({}), '42');
+    } finally {
+      delete globalThis.__expressHbsAstInjectionProbe;
+    }
   });
 
   it('rejects type-confused input AST values before code generation', () => {
