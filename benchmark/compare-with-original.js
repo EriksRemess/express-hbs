@@ -2,17 +2,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict'
 import forkHbs from '../lib/hbs.js';
 
 const require = createRequire(import.meta.url);
 
-let originalHbs;
-try {
-  originalHbs = require('tryghost-express-hbs');
-} catch (error) {
-  console.error('Missing benchmark dependency "tryghost-express-hbs". Run: npm install --prefix benchmark');
-  throw error;
+const referenceModule = process.env.BENCH_REFERENCE_MODULE
+const referenceName = referenceModule ? 'reference' : 'original'
+let referenceHbs
+if (referenceModule) {
+  referenceHbs = (await import(pathToFileURL(path.resolve(referenceModule)).href)).default
+} else {
+  try {
+    referenceHbs = require('tryghost-express-hbs')
+  } catch (error) {
+    console.error('Missing benchmark dependency "tryghost-express-hbs". Run: npm install --prefix benchmark')
+    throw error
+  }
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -391,15 +398,15 @@ function printSummary(aggregates) {
   const summaryRows = [];
   for (const mode of ['cache=false', 'cache=true']) {
     const fork = aggregates.find((item) => item.engine === 'fork' && item.mode === mode);
-    const original = aggregates.find((item) => item.engine === 'original' && item.mode === mode);
+    const original = aggregates.find((item) => item.engine === referenceName && item.mode === mode);
 
     if (fork && original) {
       const deltaPct = ((original.avgMsMedian - fork.avgMsMedian) / original.avgMsMedian) * 100;
       summaryRows.push({
         mode,
-        comparison: 'fork vs original',
+        comparison: `fork vs ${referenceName}`,
         fasterPctMedian: Number(deltaPct.toFixed(2)),
-        interpretation: deltaPct >= 0 ? 'fork faster' : 'original faster'
+        interpretation: deltaPct >= 0 ? 'fork faster' : `${referenceName} faster`
       });
     }
   }
@@ -442,6 +449,9 @@ async function main() {
   console.log(`Scenario=${selectedScenarioName}`);
   console.log(`Profile=${profile}`);
   console.log(`Iterations=${iterations}, Warmup=${warmupIterations}, Items=${itemCount}, Rounds=${rounds}`);
+  if (referenceModule) {
+    console.log(`Reference=${path.resolve(referenceModule)}`)
+  }
   if (selectedScenario.generated) {
     console.log(`GeneratedLargeSections=${largeSectionCount}, CompilerBlocks=${compilerBlockCount}`);
   }
@@ -450,8 +460,20 @@ async function main() {
 
   const engineVariants = [
     ['fork', forkHbs],
-    ['original', originalHbs]
+    [referenceName, referenceHbs]
   ];
+
+  if (referenceModule) {
+    for (const cacheEnabled of [false, true]) {
+      const renderers = engineVariants.map(([, engine]) => createRenderer(engine, selectedScenarioName))
+      // Render twice so cache=true also checks warmed templates and partials.
+      for (let pass = 0; pass < 2; pass += 1) {
+        const actual = await renderOnce(renderers[0], cacheEnabled, selectedScenario)
+        const expected = await renderOnce(renderers[1], cacheEnabled, selectedScenario)
+        assert.equal(actual, expected, `Output differs from reference with cache=${cacheEnabled}`)
+      }
+    }
+  }
 
   for (let round = 0; round < rounds; round += 1) {
     for (const cacheEnabled of [false, true]) {
@@ -481,6 +503,7 @@ async function main() {
       generatedAt: nowInstantString(),
       runtime,
       settings: {
+        referenceModule: referenceModule ? path.resolve(referenceModule) : undefined,
         scenario: selectedScenarioName,
         profile,
         iterations,

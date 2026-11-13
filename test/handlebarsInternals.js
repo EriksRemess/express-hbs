@@ -15,6 +15,7 @@ import {
 import logger from '#handlebars/logger';
 import { template } from '#handlebars/runtime';
 import { createFrame, escapeExpression } from '#handlebars/utils';
+import { createNewLookupObject } from '#handlebars/internal/create-new-lookup-object'
 import { afterEach, describe, it } from '#test/testkit';
 import assert from 'node:assert';
 
@@ -271,6 +272,51 @@ describe('handlebars unit internals', () => {
     assert.equal(frameWithParent._parent, sourceWithParent);
     assert.equal(parentReads, 0);
   });
+
+  it('copies safe own data without reading unsafe or inherited properties', () => {
+    const source = Object.create({ inherited: 'hidden' })
+    const value = { name: 'Ada' }
+    source.value = value
+    source.toString = 'own value'
+    source[Symbol('hidden')] = 'hidden'
+    Object.defineProperty(source, 'hidden', { value: 'hidden' })
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      Object.defineProperty(source, key, {
+        enumerable: true,
+        get() {
+          throw new Error(`Must not read ${key}`)
+        }
+      })
+    }
+
+    for (const copy of [createFrame(source), createNewLookupObject(source)]) {
+      assert.equal(Object.getPrototypeOf(copy), null)
+      assert.equal(copy.value, value)
+      assert.equal(copy.toString, 'own value')
+      assert.equal(copy.inherited, undefined)
+      assert.equal(copy.hidden, undefined)
+      assert.deepEqual(Object.getOwnPropertySymbols(copy), [])
+      for (const key of ['__proto__', 'constructor', 'prototype']) {
+        assert.equal(Object.hasOwn(copy, key), false)
+      }
+    }
+  })
+
+  it('preserves decorated block metadata and execution across renders', () => {
+    const hb = handlebars.create()
+    hb.registerDecorator('tag', (fn, props, _container, options) => {
+      props.tag = options.args[0]
+      return (context, execOptions) => `[${fn(context, execOptions)}]`
+    })
+    hb.registerHelper('inspect', function(options) {
+      return `${options.fn.tag}:${options.fn(this)}`
+    })
+    for (const data of [true, false]) {
+      const render = hb.compile('{{#inspect}}{{*tag "label"}}{{name}}{{/inspect}}', { data })
+      assert.equal(render({ name: 'Ada' }), 'label:[Ada]')
+      assert.equal(render({ name: 'Grace' }), 'label:[Grace]')
+    }
+  })
 
   it('does not trust prototype-inherited toHTML when escaping', () => {
     const payload = '<img src=x onerror=alert(1)>';
