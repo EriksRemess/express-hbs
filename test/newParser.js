@@ -143,6 +143,27 @@ test('literal path punctuation and non-ASCII and numeric hash keys match upstrea
   }
 });
 
+test('bracketed path segments can end in a backslash', () => {
+  for (const hb of [upstreamHandlebars, handlebars]) {
+    const context = { 'name\\': { value: 'found' } }
+    const source = String.raw`{{[name\\].value}}`
+    assert.equal(hb.compile(source)(context), 'found')
+    assert.equal(hb.parse(source).body[0].path.original, 'name\\.value')
+  }
+})
+
+for (const source of [
+  '{{echo key=1 value}}',
+  '{{echo (echo key=1 value)}}',
+  '{{#> card}}main{{else}}discarded{{/card}}',
+  '{{#*inline "card"}}main{{else if value}}discarded{{/inline}}'
+]) {
+  test(`rejects unsupported syntax in ${source}`, () => {
+    assert.throws(() => upstreamHandlebars.parse(source))
+    assert.throws(() => parse(source))
+  })
+}
+
 test('parser handles valid repo templates', async () => {
   const files = await collectTemplates(SEARCH_DIRS);
   const checked = [];

@@ -124,6 +124,14 @@ describe('async', () => {
     }, escapedId), /unresolved async placeholder/i);
   });
 
+  it('renders a helper registered while template loading is pending', async () => {
+    const hb = hbs.create()
+    hb.express()
+    const pending = hb._renderFile('pending.hbs', '{{later "value"}}', {})
+    hb.registerAsyncHelper('later', async value => value.toUpperCase())
+    assert.equal(await pending, 'VALUE')
+  })
+
   it('preserves iteration data and parent data across deferred helpers', async () => {
     const hb = hbs.create();
     hb.express();

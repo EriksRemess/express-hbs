@@ -45,6 +45,113 @@ const createApp = (env) => createExampleApp( hbs.create(), env );
 
 describe('express-hbs', () => {
   describe('cache', () => {
+    for (const refresh of [false, true]) {
+      it(`keeps the last successful partials and retries rejected registrations with refresh=${refresh}`, async () => {
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-register-retry-'))
+        try {
+          const hb = hbs.create()
+          const external = hb.handlebars.create()
+          const register = external.registerPartial.bind(external)
+          let fail = false
+          external.registerPartial = (name, partial) => {
+            if (fail && name === 'second') throw new Error('registration failed')
+            register(name, partial)
+          }
+          hb.express({ handlebars: external, partialsDir: dir, refreshPartialsManifest: refresh })
+          const first = path.join(dir, 'first.hbs')
+          const second = path.join(dir, 'second.hbs')
+          await fs.writeFile(first, 'old first')
+          await fs.writeFile(second, 'old second')
+          await hb.cachePartials()
+          const render = external.compile('{{> first}}/{{> second}}')
+          assert.equal(render({}), 'old first/old second')
+          await fs.writeFile(first, 'new first value')
+          await fs.writeFile(second, 'new second value')
+          fail = true
+          await assert.rejects(hb.cachePartials(), /registration failed/)
+          assert.equal(render({}), 'old first/old second')
+          fail = false
+          await hb.cachePartials()
+          assert.equal(render({}), 'new first value/new second value')
+        } finally {
+          await fs.rm(dir, { recursive: true, force: true })
+        }
+      })
+    }
+
+    it('unregisters discovered partials through an adapter with a private registry', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-private-registry-'))
+      try {
+        const hb = hbs.create()
+        const external = hb.handlebars.create()
+        const adapter = { Utils: external.Utils, SafeString: external.SafeString }
+        for (const method of ['compile', 'registerHelper', 'registerPartial', 'unregisterHelper', 'unregisterPartial']) {
+          adapter[method] = external[method].bind(external)
+        }
+        hb.express({ handlebars: adapter, partialsDir: dir })
+        await fs.writeFile(path.join(dir, 'piece.hbs'), 'piece')
+        await hb.cachePartials()
+        const render = external.compile('{{> piece}}')
+        assert.equal(render({}), 'piece')
+        hb.invalidatePartialsManifest()
+        assert.throws(() => render({}), /partial piece could not be found/)
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('can invalidate a lazy partial after registration of its compiled template fails', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-lazy-registration-'))
+      try {
+        const hb = hbs.create()
+        hb.express({ partialsDir: dir })
+        await fs.writeFile(path.join(dir, 'piece.hbs'), 'piece')
+        await hb.cachePartials()
+        hb.handlebars.registerPartial = () => {
+          throw new Error('registration failed')
+        }
+        const render = hb.handlebars.compile('{{> piece}}')
+        assert.throws(() => render({}), /registration failed/)
+        hb.invalidatePartialsManifest()
+        assert.throws(() => render({}), /partial piece could not be found/)
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('retries an obsolete failing file read after manifest invalidation', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-obsolete-read-'))
+      const oldFile = path.join(dir, 'old.hbs')
+      const readFile = fs.readFile
+      const entered = Promise.withResolvers()
+      const release = Promise.withResolvers()
+      let pending
+      try {
+        const hb = hbs.create()
+        hb.express({ partialsDir: dir })
+        await fs.writeFile(oldFile, 'old')
+        fs.readFile = async (...args) => {
+          if (args[0] === oldFile) {
+            entered.resolve()
+            await release.promise
+          }
+          return readFile(...args)
+        }
+        pending = hb.cachePartials()
+        await Promise.race([entered.promise, pending])
+        hb.invalidatePartialsManifest()
+        await fs.rename(oldFile, path.join(dir, 'current.hbs'))
+        release.resolve()
+        assert.equal(await pending, true)
+        assert.equal(hb.handlebars.compile('{{> current}}')({}), 'old')
+      } finally {
+        release.resolve()
+        await pending?.catch(() => {})
+        fs.readFile = readFile
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    })
+
     it('does not retain an old restriction root when reconfiguration changes a symlink', async () => {
       const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-reconfigured-root-'));
       const originalRealpath = fs.realpath;
@@ -237,6 +344,57 @@ describe('express-hbs', () => {
         }
       });
     }
+
+    it('removes a discovered partial after a failed manual replacement', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-partial-replacement-'))
+      try {
+        const hb = hbs.create()
+        const file = path.join(dir, 'p.hbs')
+        await fs.writeFile(file, 'discovered')
+        hb.express({ partialsDir: dir })
+        await hb.cachePartials()
+        assert.throws(() => hb.registerPartial('p', null), /Template source must be a string/)
+        await fs.unlink(file)
+        hb.invalidatePartialsManifest()
+        await assert.rejects(hb._renderFile(path.join(dir, 'view.hbs'), '{{> p}}', {}), /partial p could not be found/)
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('keeps a newer partial refresh when an earlier read completes last', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-overlapping-refresh-'))
+      const file = path.join(dir, 'p.hbs')
+      const hb = hbs.create()
+      const entered = Promise.withResolvers()
+      const release = Promise.withResolvers()
+      const readFile = fs.readFile
+      let pending
+      try {
+        await fs.writeFile(file, 'old')
+        hb.express({ partialsDir: dir })
+        fs.readFile = async (...args) => {
+          const value = await readFile(...args)
+          if (args[0] === file && value === 'old') {
+            entered.resolve()
+            await release.promise
+          }
+          return value
+        }
+        pending = hb.cachePartials()
+        await Promise.race([entered.promise, pending])
+        await fs.writeFile(file, 'replacement')
+        await hb.cachePartials()
+        release.resolve()
+        await pending
+        assert.equal(await hb._renderFile(path.join(dir, 'page.hbs'), '{{> p}}', { cache: true }), 'replacement')
+      } finally {
+        release.resolve()
+        await pending?.catch(() => {})
+        fs.readFile = readFile
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    })
 
     it('renders concurrent requests during initial and refreshed partial discovery', async () => {
       const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hbs-concurrent-partials-'));

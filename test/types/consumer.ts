@@ -45,3 +45,14 @@ hbs.updateLocalTemplateOptions({}, {
     section: 'main'
   }
 });
+
+const partialsReady: Promise<boolean> = isolated.cachePartials();
+const compiledLayouts: Promise<Function[]> = isolated.cacheLayout('layout.hbs', true);
+const defaultLayouts: Promise<Function[] | null> = isolated.loadDefaultLayout(true);
+const callbackReturn: void = isolated.cachePartials((_err, _ready) => {});
+
+// @ts-expect-error Both render forms require a completion callback.
+renderWithoutOptions('page.hbs', {}, {});
+// @ts-expect-error Inline source also requires an options argument.
+renderWithoutOptions('page.hbs', '{{title}}', (_err: Error | null, _html: string | null) => {});
+isolated.___express('page.hbs', '{{title}}', { title: 'hello' }, (_err, _html) => {});

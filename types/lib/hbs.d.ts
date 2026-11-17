@@ -1,7 +1,8 @@
 export type AnyObject = Record<string, unknown>;
-export type NodeStyleCallback = (err: Error | null, value?: unknown) => void;
+export type NodeStyleCallback<T = unknown> = (err: Error | null, value?: T) => void;
+export type CacheResult<Callback, T> = Callback extends null | undefined ? Promise<T> : void;
 export type ExpressRenderCallback = (err: Error | null, html: string | null) => void;
-export type ExpressRenderFunction = (filename: string, sourceOrOptions: string | AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback) => void;
+export type ExpressRenderFunction = ExpressHbs['___express'];
 export type LocalHandlebars = import('./handlebars.d.ts').LocalHandlebars;
 export type CompileHook = (instance: ExpressHbs, source: string, filename?: string) => Function;
 export type EngineOptions = AnyObject & {
@@ -39,12 +40,14 @@ declare class ExpressHbs {
     };
     cwd: string;
     _options: any;
-    hasGlobalTemplateOptions: boolean;
     cache: Map<any, any>;
     defaultLayoutTemplates: Function[];
     isPartialCachingComplete: boolean;
     hasAsyncHelpers: boolean;
     _partialsManifestGeneration: number;
+    _partialsLoadId: number;
+    _publishedPartialsLoadId: number;
+    _partialsRevision: number;
     /** @type {{ fullPath: string, name: string }[] | null} */
     partialsManifest: {
         fullPath: string;
@@ -68,7 +71,7 @@ declare class ExpressHbs {
     filenameDirCache: Map<any, any>;
     /** @type {CompileHook | undefined} */
     onCompile: CompileHook | undefined;
-    _engineHelperNames: Set<any>;
+    _engineHelpers: Map<any, any>;
     _engineHelpersHandlebars: import("./handlebars.d.ts").LocalHandlebars;
     /**
      * Initializes engine state and caches.
@@ -218,24 +221,53 @@ declare class ExpressHbs {
      * @param {boolean} useCache
      * @param {string | string[]} viewsDir
      * @param {string | undefined} [allowedRoot]
-     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal, layoutBaseDir?: string }} [context]
+     * @param {{ seenLayouts?: Set<string>, signal?: AbortSignal, layoutBaseDir?: string, skipMissing?: boolean }} [context]
      * @returns {Promise<Function[]>}
      */
     _cacheLayout(layoutFile: string, useCache: boolean, viewsDir: string | string[], allowedRoot?: string | undefined, context?: {
         seenLayouts?: Set<string>;
         signal?: AbortSignal;
         layoutBaseDir?: string;
+        skipMissing?: boolean;
     }): Promise<Function[]>;
     /**
-     * Callback/Promise wrapper for layout caching.
-     *
+     * @overload
      * @param {string} layoutFile
      * @param {boolean} useCache
-     * @param {NodeStyleCallback} [cb]
+     * @param {null | undefined} [cb]
      * @param {string | string[]} [viewsDir]
-     * @returns {Promise<Function[]> | void}
+     * @returns {Promise<Function[]>}
      */
-    cacheLayout(layoutFile: string, useCache: boolean, cb?: NodeStyleCallback, viewsDir?: string | string[]): Promise<Function[]> | void;
+    /**
+     * @template {NodeStyleCallback<Function[] | null> | null | undefined} Callback
+     * @overload
+     * @param {string} layoutFile
+     * @param {boolean} useCache
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, Function[]>}
+     */
+    /** Callback/Promise wrapper for layout caching. */
+    cacheLayout(layoutFile: string, useCache: boolean, cb?: null | undefined, viewsDir?: string | string[]): Promise<Function[]>;
+    /**
+     * @overload
+     * @param {string} layoutFile
+     * @param {boolean} useCache
+     * @param {null | undefined} [cb]
+     * @param {string | string[]} [viewsDir]
+     * @returns {Promise<Function[]>}
+     */
+    /**
+     * @template {NodeStyleCallback<Function[] | null> | null | undefined} Callback
+     * @overload
+     * @param {string} layoutFile
+     * @param {boolean} useCache
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, Function[]>}
+     */
+    /** Callback/Promise wrapper for layout caching. */
+    cacheLayout<Callback extends NodeStyleCallback<Function[] | null> | null | undefined>(layoutFile: string, useCache: boolean, cb: Callback, viewsDir?: string | string[]): CacheResult<Callback, Function[]>;
     /**
      * Discovers and compiles partials from configured directories.
      *
@@ -245,13 +277,35 @@ declare class ExpressHbs {
      */
     _cachePartials(viewsDir: string | string[], signal?: AbortSignal): Promise<boolean>;
     /**
-     * Callback/Promise wrapper for partial caching.
-     *
-     * @param {NodeStyleCallback} [cb]
+     * @overload
+     * @param {null | undefined} [cb]
      * @param {string | string[]} [viewsDir]
-     * @returns {Promise<boolean> | void}
+     * @returns {Promise<boolean>}
      */
-    cachePartials(cb?: NodeStyleCallback, viewsDir?: string | string[]): Promise<boolean> | void;
+    /**
+     * @template {NodeStyleCallback<boolean> | null | undefined} Callback
+     * @overload
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, boolean>}
+     */
+    /** Callback/Promise wrapper for partial caching. */
+    cachePartials(cb?: null | undefined, viewsDir?: string | string[]): Promise<boolean>;
+    /**
+     * @overload
+     * @param {null | undefined} [cb]
+     * @param {string | string[]} [viewsDir]
+     * @returns {Promise<boolean>}
+     */
+    /**
+     * @template {NodeStyleCallback<boolean> | null | undefined} Callback
+     * @overload
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, boolean>}
+     */
+    /** Callback/Promise wrapper for partial caching. */
+    cachePartials<Callback extends NodeStyleCallback<boolean> | null | undefined>(cb: Callback, viewsDir?: string | string[]): CacheResult<Callback, boolean>;
     /**
      * Clears partial directory manifest so it can be rebuilt on next render.
      *
@@ -288,14 +342,39 @@ declare class ExpressHbs {
      */
     _loadDefaultLayout(useCache: boolean, viewsDir: string | string[], signal?: AbortSignal): Promise<Function[] | null>;
     /**
-     * Callback/Promise wrapper for default layout loading.
-     *
+     * @overload
      * @param {boolean} useCache
-     * @param {NodeStyleCallback} [cb]
+     * @param {null | undefined} [cb]
      * @param {string | string[]} [viewsDir]
-     * @returns {Promise<Function[] | null> | void}
+     * @returns {Promise<Function[] | null>}
      */
-    loadDefaultLayout(useCache: boolean, cb?: NodeStyleCallback, viewsDir?: string | string[]): Promise<Function[] | null> | void;
+    /**
+     * @template {NodeStyleCallback<Function[] | null> | null | undefined} Callback
+     * @overload
+     * @param {boolean} useCache
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, Function[] | null>}
+     */
+    /** Callback/Promise wrapper for default layout loading. */
+    loadDefaultLayout(useCache: boolean, cb?: null | undefined, viewsDir?: string | string[]): Promise<Function[] | null>;
+    /**
+     * @overload
+     * @param {boolean} useCache
+     * @param {null | undefined} [cb]
+     * @param {string | string[]} [viewsDir]
+     * @returns {Promise<Function[] | null>}
+     */
+    /**
+     * @template {NodeStyleCallback<Function[] | null> | null | undefined} Callback
+     * @overload
+     * @param {boolean} useCache
+     * @param {Callback} cb
+     * @param {string | string[]} [viewsDir]
+     * @returns {CacheResult<Callback, Function[] | null>}
+     */
+    /** Callback/Promise wrapper for default layout loading. */
+    loadDefaultLayout<Callback extends NodeStyleCallback<Function[] | null> | null | undefined>(useCache: boolean, cb: Callback, viewsDir?: string | string[]): CacheResult<Callback, Function[] | null>;
     /**
      * Registers a Handlebars helper.
      *
@@ -315,15 +394,15 @@ declare class ExpressHbs {
      */
     registerPartial(name: string, source: string, filename?: string, viewsDir?: string | string[]): void;
     /**
-     * Registers a partial that compiles itself on first use.
+     * Creates a partial that compiles itself on first use.
      *
      * @param {string} name
      * @param {string} source
      * @param {string} filename
      * @param {string | string[]} [viewsDir]
-     * @returns {void}
+     * @returns {Function}
      */
-    _registerLazyPartial(name: string, source: string, filename: string, viewsDir?: string | string[]): void;
+    _createLazyPartial(name: string, source: string, filename: string, viewsDir?: string | string[]): Function;
     /**
      * Compiles a template source string.
      *
@@ -341,6 +420,7 @@ declare class ExpressHbs {
      * @returns {void}
      */
     registerAsyncHelper(name: string, fn: Function): void;
+    get hasGlobalTemplateOptions(): boolean;
     /**
      * Returns global template options.
      *
@@ -515,15 +595,39 @@ declare class ExpressHbs {
         signal?: AbortSignal;
     }): Promise<string>;
     /**
-     * Express view-engine entry point.
-     *
+     * @overload
      * @param {string} filename
-     * @param {AnyObject | null} sourceOrOptions
-     * @param {AnyObject | ExpressRenderCallback} optionsOrCb
-     * @param {ExpressRenderCallback} [maybeCb]
+     * @param {AnyObject | null | undefined} options
+     * @param {ExpressRenderCallback} cb
      * @returns {void}
      */
-    ___express(filename: string, sourceOrOptions: AnyObject | null, optionsOrCb: AnyObject | ExpressRenderCallback, maybeCb?: ExpressRenderCallback): void;
+    /**
+     * @overload
+     * @param {string} filename
+     * @param {string | null} source
+     * @param {AnyObject | null | undefined} options
+     * @param {ExpressRenderCallback} cb
+     * @returns {void}
+     */
+    /** Express view-engine entry point. */
+    ___express(filename: string, options: AnyObject | null | undefined, cb: ExpressRenderCallback): void;
+    /**
+     * @overload
+     * @param {string} filename
+     * @param {AnyObject | null | undefined} options
+     * @param {ExpressRenderCallback} cb
+     * @returns {void}
+     */
+    /**
+     * @overload
+     * @param {string} filename
+     * @param {string | null} source
+     * @param {AnyObject | null | undefined} options
+     * @param {ExpressRenderCallback} cb
+     * @returns {void}
+     */
+    /** Express view-engine entry point. */
+    ___express(filename: string, source: string | null, options: AnyObject | null | undefined, cb: ExpressRenderCallback): void;
 }
 declare const _default: ExpressHbs;
 export default _default;

@@ -66,10 +66,10 @@
     "node": ">=26.0.0"
   },
   "devDependencies": {
-    "@eriksremess/express": "5.2.8",
+    "@eriksremess/express": "5.2.10",
     "@types/node": "^26.6.6",
     "cookie-parser": "1.4.7",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "handlebars": "^4.7.10",
     "i18n": "0.15.4",

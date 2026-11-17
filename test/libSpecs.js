@@ -1783,6 +1783,15 @@ describe('lib helpers', () => {
       );
     });
 
+    it('preserves a replacement helper on an external Handlebars instance during reconfiguration', () => {
+      const hb = hbs.create()
+      const external = handlebars.create()
+      hb.express({ handlebars: external })
+      external.registerHelper('block', name => name.toUpperCase())
+      hb.express()
+      assert.equal(external.compile('{{block "example"}}')({}), 'EXAMPLE')
+    })
+
     it('removes i18n helpers when reconfiguring without i18n', async () => {
       const hb = hbs.create();
       hb.express({

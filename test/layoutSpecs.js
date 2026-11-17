@@ -59,6 +59,55 @@ describe('layouts', () => {
     }
   });
 
+  it('reports a missing parent of the first matching layout', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-missing-parent-'))
+    try {
+      const first = path.join(root, 'first')
+      const second = path.join(root, 'second')
+      await fs.mkdir(first)
+      await fs.mkdir(second)
+      await fs.writeFile(path.join(first, 'child.hbs'), '{{!< parent}}{{{body}}}')
+      await fs.writeFile(path.join(second, 'child.hbs'), 'fallback')
+      const hb = hbs.create()
+      hb.express({ layoutsDir: [first, second] })
+      for (const cache of [false, true]) {
+        await assert.rejects(hb._renderFile(path.join(root, 'page.hbs'), 'page', { layout: 'child', cache }),
+          { code: 'ENOENT', path: path.join(first, 'parent.hbs') })
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves an absolute layout and its parent in the second configured directory', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ehbs-absolute-layout-'))
+    try {
+      const first = path.join(root, 'first')
+      const second = path.join(root, 'second')
+      await fs.mkdir(first)
+      await fs.mkdir(second)
+      const layout = path.join(second, 'child.hbs')
+      await fs.writeFile(layout, '{{!< parent}}child[{{{body}}}]')
+      await fs.writeFile(path.join(second, 'parent.hbs'), 'parent[{{{body}}}]')
+      for (const restrictLayoutsTo of [undefined, root]) {
+        const hb = hbs.create()
+        hb.express({ layoutsDir: [first, second], restrictLayoutsTo })
+        for (const cache of [false, true]) {
+          assert.equal(await hb._renderFile(path.join(root, 'page.hbs'), 'page', { layout, cache }),
+            'parent[child[page]]')
+        }
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('renders an inline view with an empty views directory list', async () => {
+    const hb = hbs.create()
+    hb.express({ viewsDir: [] })
+    assert.equal(await hb._renderFile('page.hbs', '{{value}}', { value: 'page' }), 'page')
+  })
+
   it('resolves absolute layouts with only an explicit restriction root and rejects escapes', async () => {
     const root = path.join(__dirname, 'views/disableLayoutDirective');
     const hb = hbs.create();

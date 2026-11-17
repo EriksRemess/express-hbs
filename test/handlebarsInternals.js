@@ -17,9 +17,60 @@ import { template } from '#handlebars/runtime';
 import { createFrame, escapeExpression } from '#handlebars/utils';
 import { createNewLookupObject } from '#handlebars/internal/create-new-lookup-object'
 import { afterEach, describe, it } from '#test/testkit';
+import { runInNewContext } from 'node:vm'
 import assert from 'node:assert';
 
 describe('handlebars unit internals', () => {
+  it('applies the registered if helper to unless with the branches reversed', () => {
+    const hb = handlebars.create()
+    hb.registerHelper('if', function(value, options) {
+      return value === options.hash.match ? options.fn(this) : options.inverse(this)
+    })
+    const render = hb.compile('{{#unless status match="ready"}}wait{{else}}go{{/unless}}')
+    assert.equal(render({ status: 'pending' }), 'wait')
+    assert.equal(render({ status: 'ready' }), 'go')
+  })
+
+  it('includes the resolved name when a dynamic partial has an invalid registration', () => {
+    const hb = handlebars.create()
+    const render = hb.compile('{{> (lookup . "name")}}')
+    assert.throws(() => render({ name: 'card' }, { partials: { card: 42 } }), /partial card\b/i)
+  })
+
+  it('preserves the compiled partial environment for dynamic partial names', () => {
+    const caller = handlebars.create()
+    const owner = handlebars.create()
+    for (const [hb, label] of [[caller, 'caller'], [owner, 'owner']]) {
+      hb.registerHelper('label', () => label)
+      hb.registerPartial('detail', label)
+    }
+    caller.registerPartial('card', owner.compile('{{label}}/{{> detail}}'))
+    const render = caller.compile('{{> card}}|{{> (lookup . "name")}}')
+    assert.equal(render({ name: 'card' }), 'owner/owner|owner/owner')
+  })
+
+  it('reports a function partial that returns no output for direct and dynamic calls', () => {
+    const hb = handlebars.create()
+    for (const value of [undefined, null, '']) {
+      hb.registerPartial('card', () => value)
+      for (const source of ['{{> card}}', '{{> (lookup . "name")}}']) {
+        const render = hb.compile(source)
+        if (value === '') {
+          assert.equal(render({ name: 'card' }), '')
+        } else {
+          assert.throws(() => render({ name: 'card' }), /partial card returned no output/i)
+        }
+      }
+    }
+  })
+
+  it('renders a function partial from another realm with and without hash arguments', () => {
+    const hb = handlebars.create()
+    hb.registerPartial('card', runInNewContext('(context => context.label)'))
+    const render = hb.compile('{{> card}}|{{> card label="second"}}')
+    assert.equal(render({ label: 'first' }), 'first|second')
+  })
+
   it('creates isolated instances from full and runtime-only instances', () => {
     for (const root of [handlebars, runtime]) {
       const parent = root.create();
@@ -171,6 +222,51 @@ describe('handlebars unit internals', () => {
     assert.equal(located.column, 3);
     assert.equal(located.endColumn, 5);
   });
+
+  for (const name of ['if', 'unless', 'with']) {
+    it(`rejects extra positional arguments to #${name}`, () => {
+      const render = handlebars.compile(`{{#${name} true false}}yes{{else}}no{{/${name}}}`)
+      assert.throws(() => render({}), { message: `#${name} requires exactly one argument` })
+    })
+  }
+
+  it('renders each yielded value when an iterator reuses its result object', () => {
+    const items = {
+      [Symbol.iterator]() {
+        const result = { value: 0, done: false }
+        return {
+          next() {
+            result.value += 1
+            result.done = result.value > 2
+            return result
+          }
+        }
+      }
+    }
+    const render = handlebars.compile('{{#each items}}{{@index}}={{this}}:{{@last}};{{/each}}')
+    assert.equal(render({ items }), '0=1:false;1=2:true;')
+  })
+
+  it('closes an unfinished iterator when an each block throws', () => {
+    const hb = handlebars.create()
+    const failure = new Error('block failed')
+    hb.registerHelper('fail', () => {
+      throw failure
+    })
+    const render = hb.compile('{{#each items}}{{fail}}{{/each}}')
+    let closed = false
+    function* items() {
+      try {
+        yield 1
+        yield 2
+      } finally {
+        closed = true
+        throw new Error('cleanup failed')
+      }
+    }
+    assert.throws(() => render({ items: items() }), err => err === failure)
+    assert.equal(closed, true)
+  })
 
   it('covers helperMissing, if/unless, lookup, and log helpers', () => {
     const hb = handlebars.create();

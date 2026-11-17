@@ -12,6 +12,14 @@ describe('local template options', () => {
 
   describe('express', () => {
 
+    it('renders data added to initially empty global template options', async () => {
+      const hb = hbs.create()
+      hb.express()
+      const options = hb.getTemplateOptions()
+      options.data = { greeting: 'Hello' }
+      assert.equal(await hb._renderFile('inline.hbs', '{{@greeting}}', {}), 'Hello')
+    })
+
     it('merges res.locals._templateOptions with the self._templateOptions', async () => {
       const instance = hbs.create();
       const render = instance.express({
