@@ -35,6 +35,12 @@ const compilerTemplateFile = path.join(generatedViewsDir, 'compiler.hbs');
 const scenario = process.env.BENCH_SCENARIO ?? 'baseline';
 const largeSectionCount = Number.parseInt(process.env.BENCH_LARGE_SECTIONS ?? '12', 10);
 const compilerBlockCount = Number.parseInt(process.env.BENCH_COMPILER_BLOCKS ?? '180', 10);
+const compilerScenario = {
+  templateFile: compilerTemplateFile,
+  verifyText: 'COMPILER STRESS BENCHMARK COMPLETE',
+  defaultItems: 40,
+  defaultProfile: 'compiler'
+}
 const scenarioDefaults = {
   baseline: {
     templateFile: baselineTemplateFile,
@@ -55,16 +61,14 @@ const scenarioDefaults = {
     defaultProfile: 'fixture',
     generated: true
   },
-  compiler: {
-    templateFile: compilerTemplateFile,
-    verifyText: 'COMPILER STRESS BENCHMARK COMPLETE',
-    defaultItems: 40,
-    defaultProfile: 'compiler',
-    generated: true
-  }
+  compiler: { ...compilerScenario, generated: true },
+  'compiler-cold': compilerScenario
 };
 const selectedScenarioName = scenarioDefaults[scenario] ? scenario : 'baseline';
 const selectedScenario = scenarioDefaults[selectedScenarioName];
+const benchmarkModes = selectedScenarioName === 'compiler-cold'
+  ? ['compile+first render']
+  : ['cache=false', 'cache=true']
 
 const profile = process.env.BENCH_PROFILE ?? selectedScenario.defaultProfile;
 const profileDefaults = {
@@ -229,10 +233,10 @@ function getExpressFactory(engine) {
   throw new Error('Engine instance does not expose express()/express4()');
 }
 
-function createRenderer(engineModule, scenarioName) {
+function createBenchmarkRender(engineModule, mode) {
   const engine = engineModule.create();
 
-  if (scenarioName === 'baseline' || scenarioName === 'async') {
+  if (selectedScenarioName === 'baseline' || selectedScenarioName === 'async') {
     engine.registerAsyncHelper('delayUpper', (value, cb) => {
       queueMicrotask(() => cb(String(value).toUpperCase()));
     });
@@ -245,7 +249,7 @@ function createRenderer(engineModule, scenarioName) {
     return `${label}:${value}:${alternate}${order}`;
   });
 
-  if (scenarioName === 'async') {
+  if (selectedScenarioName === 'async') {
     engine.registerAsyncHelper('delayWrap', (value, cb) => {
       queueMicrotask(() => cb(`[${String(value)}]`));
     });
@@ -257,13 +261,22 @@ function createRenderer(engineModule, scenarioName) {
 
   const express = getExpressFactory(engine);
 
-  return express({
+  const renderFile = express({
     extname: '.hbs',
     partialsDir: partialsDir,
     layoutsDir: layoutsDir,
     defaultLayout: path.join(layoutsDir, 'default'),
     viewsDir: viewsDir
   });
+  if (mode === 'compile+first render') {
+    const source = buildCompilerTemplate()
+    const locals = createRenderOptions(false, selectedScenario)
+    return () => {
+      locals.blockCache = Object.create(null)
+      return engine.compile(source)(locals)
+    }
+  }
+  return () => renderOnce(renderFile, mode === 'cache=true', selectedScenario)
 }
 
 function createCompilerLocals() {
@@ -310,27 +323,27 @@ function renderOnce(renderer, cacheEnabled, scenarioConfig) {
   });
 }
 
-async function runScenario(name, engineModule, cacheEnabled, scenarioConfig) {
-  const renderer = createRenderer(engineModule, selectedScenarioName);
+async function runScenario(name, engineModule, mode) {
+  const render = createBenchmarkRender(engineModule, mode)
 
   for (let i = 0; i < warmupIterations; i += 1) {
-    await renderOnce(renderer, cacheEnabled, scenarioConfig);
+    await render()
   }
 
   const start = performance.now();
   for (let i = 0; i < iterations; i += 1) {
-    await renderOnce(renderer, cacheEnabled, scenarioConfig);
+    await render()
   }
   const totalMs = performance.now() - start;
 
-  const firstRender = await renderOnce(renderer, cacheEnabled, scenarioConfig);
-  if (!firstRender.includes(scenarioConfig.verifyText)) {
+  const html = await render()
+  if (!html.includes(selectedScenario.verifyText)) {
     throw new Error(`Unexpected output while benchmarking ${name}`);
   }
 
   return {
     engine: name,
-    mode: cacheEnabled ? 'cache=true' : 'cache=false',
+    mode,
     iterations: iterations,
     totalMs: Number(totalMs.toFixed(2)),
     avgMs: Number((totalMs / iterations).toFixed(3)),
@@ -396,7 +409,7 @@ function aggregateResults(samples) {
 
 function printSummary(aggregates) {
   const summaryRows = [];
-  for (const mode of ['cache=false', 'cache=true']) {
+  for (const mode of benchmarkModes) {
     const fork = aggregates.find((item) => item.engine === 'fork' && item.mode === mode);
     const original = aggregates.find((item) => item.engine === referenceName && item.mode === mode);
 
@@ -454,6 +467,8 @@ async function main() {
   }
   if (selectedScenario.generated) {
     console.log(`GeneratedLargeSections=${largeSectionCount}, CompilerBlocks=${compilerBlockCount}`);
+  } else if (selectedScenarioName === 'compiler-cold') {
+    console.log(`CompilerBlocks=${compilerBlockCount}`)
   }
 
   await ensureGeneratedFixtures();
@@ -464,24 +479,24 @@ async function main() {
   ];
 
   if (referenceModule) {
-    for (const cacheEnabled of [false, true]) {
-      const renderers = engineVariants.map(([, engine]) => createRenderer(engine, selectedScenarioName))
+    for (const mode of benchmarkModes) {
+      const renderers = engineVariants.map(([, engine]) => createBenchmarkRender(engine, mode))
       // Render twice so cache=true also checks warmed templates and partials.
       for (let pass = 0; pass < 2; pass += 1) {
-        const actual = await renderOnce(renderers[0], cacheEnabled, selectedScenario)
-        const expected = await renderOnce(renderers[1], cacheEnabled, selectedScenario)
-        assert.equal(actual, expected, `Output differs from reference with cache=${cacheEnabled}`)
+        const actual = await renderers[0]()
+        const expected = await renderers[1]()
+        assert.equal(actual, expected, `Output differs from reference with ${mode}`)
       }
     }
   }
 
   for (let round = 0; round < rounds; round += 1) {
-    for (const cacheEnabled of [false, true]) {
-      const shift = (round + (cacheEnabled ? 1 : 0)) % engineVariants.length;
+    for (const [modeIndex, mode] of benchmarkModes.entries()) {
+      const shift = (round + modeIndex) % engineVariants.length;
       const scenarioOrder = engineVariants.map((_, index) => engineVariants[(index + shift) % engineVariants.length]);
 
       for (const [name, engine] of scenarioOrder) {
-        const sample = await runScenario(name, engine, cacheEnabled, selectedScenario);
+        const sample = await runScenario(name, engine, mode)
         sample.round = round + 1;
         samples.push(sample);
       }

@@ -542,16 +542,23 @@ declare class ExpressHbs {
      */
     _updateAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, changedKeys: string[], escapedIds: Record<string, string>): void;
     /**
-     * Propagates already resolved async placeholder values through nested helper results.
+     * Resolves each nested representation after its dependencies, retaining unknown IDs for later batches.
      *
      * @param {Record<string, unknown>} values
      * @param {Record<string, unknown>} replacements
      * @param {string[]} nestedValueKeys
      * @param {Record<string, string>} escapedIds
      * @param {number} replacementCount
+     * @param {{ pending: Map<string, { text: string, escapeAfter?: boolean }>, poll: () => boolean }} [state]
      * @returns {string[]}
      */
-    _resolveNestedAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, nestedValueKeys: string[], escapedIds: Record<string, string>, replacementCount: number): string[];
+    _resolveNestedAsyncReplacements(values: Record<string, unknown>, replacements: Record<string, unknown>, nestedValueKeys: string[], escapedIds: Record<string, string>, replacementCount: number, state?: {
+        pending: Map<string, {
+            text: string;
+            escapeAfter?: boolean;
+        }>;
+        poll: () => boolean;
+    }): string[];
     /**
      * Replaces async placeholder ids in a string.
      *

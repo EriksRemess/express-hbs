@@ -7,6 +7,7 @@
     "async": "BENCH_SCENARIO=async node compare-with-original.js",
     "large": "BENCH_SCENARIO=large node compare-with-original.js",
     "compiler": "BENCH_SCENARIO=compiler node compare-with-original.js",
+    "compiler:cold": "BENCH_SCENARIO=compiler-cold node compare-with-original.js",
     "parser": "node parser.js"
   },
   "dependencies": {

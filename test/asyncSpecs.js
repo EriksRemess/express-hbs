@@ -124,6 +124,53 @@ describe('async', () => {
     }, escapedId), /unresolved async placeholder/i);
   });
 
+  it('escapes the completed value at each level of a shared async subexpression', async () => {
+    const hb = hbs.create()
+    hb.express({})
+    hb.registerAsyncHelper('leaf', async () => '<&')
+    hb.registerAsyncHelper('wrap', async value => '[' + hb.Utils.escapeExpression(value) + ']')
+    hb.registerAsyncHelper('both', async value => value + '|' + hb.Utils.escapeExpression(value))
+
+    assert.equal(await hb._renderFile('nested.hbs', '{{{both (wrap (wrap (leaf)))}}}', {}),
+      '[[&amp;lt;&amp;amp;]]|[[&amp;amp;lt;&amp;amp;amp;]]')
+  })
+
+  it('resolves an ID assembled from fragments when its helper arrives in a later batch', async () => {
+    const hb = hbs.create()
+    const outer = '__aSyNcId__<_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa__'
+    const fragment = '__aSyNcId__<_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb__'
+    const late = '__aSyNcId__<_cccccccccccccccccccccccccccccccc__'
+    const cache = new Map()
+    cache.set(outer, Promise.resolve(late.slice(0, -3) + fragment))
+    cache.set(fragment, Promise.resolve().then(() => {
+      cache.set(late, Promise.resolve('<value>'))
+      return late.slice(-3)
+    }))
+    assert.equal(await hb._resolveAsyncHtml(cache, outer + '|' + hb.Utils.escapeExpression(outer)),
+      '<value>|&lt;value&gt;')
+  })
+
+  it('resumes a nested substitution when converting a value invokes another helper', async () => {
+    const hb = hbs.create()
+    hb.express({})
+    hb.registerAsyncHelper('late', async () => '<late>')
+    const late = hb.compile('{{{late}}}')
+    let conversions = 0
+    hb.registerAsyncHelper('value', function(options, cb) {
+      cb({
+        toString() {
+          conversions += 1
+          if (conversions === 1) return 'escaped form'
+          assert.equal(conversions, 2)
+          return late({}, { data: options.data })
+        }
+      })
+    })
+    hb.registerAsyncHelper('wrap', async value => '[' + value + ']')
+    assert.equal(await hb._renderFile('late.hbs', '{{wrap (value)}}', {}), '[&lt;late&gt;]')
+    assert.equal(conversions, 2)
+  })
+
   it('renders a helper registered while template loading is pending', async () => {
     const hb = hbs.create()
     hb.express()

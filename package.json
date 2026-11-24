@@ -49,6 +49,7 @@
     "bench:async": "npm --prefix benchmark run async",
     "bench:large": "npm --prefix benchmark run large",
     "bench:compiler": "npm --prefix benchmark run compiler",
+    "bench:compiler:cold": "npm --prefix benchmark run compiler:cold",
     "bench:parser": "npm --prefix benchmark run parser"
   },
   "repository": {

@@ -5,6 +5,13 @@ Run `npm run bench`, `npm run bench:async`, `npm run bench:large`, or
 tree with upstream `express-hbs` (install its dependency with
 `npm install --prefix benchmark`).
 
+Run `npm run bench:compiler:cold` to measure compilation and first render in
+a separate process from the file-render benchmarks. Each iteration compiles
+the page from the same in-memory source and immediately renders it with prepared
+locals. This exercises lazy compilation. The two file-render modes in
+`bench:compiler` also include layout rendering and can reuse compiled templates
+after warmup.
+
 To measure a local change against an earlier version of this fork, save a
 baseline before editing:
 

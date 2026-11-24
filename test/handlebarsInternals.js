@@ -414,6 +414,16 @@ describe('handlebars unit internals', () => {
     }
   })
 
+  it('honors child decorators supplied by an external template spec', () => {
+    const hb = handlebars.create()
+    const render = hb.template({
+      main: (container, context) => container.program(1)(context),
+      1: () => 'child',
+      '1_d': fn => context => '[' + fn(context) + ']'
+    })
+    assert.equal(render({}), '[child]')
+  })
+
   it('does not trust prototype-inherited toHTML when escaping', () => {
     const payload = '<img src=x onerror=alert(1)>';
 
